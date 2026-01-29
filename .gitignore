@@ -3,3 +3,4 @@ bin/
 .venv/
 plans/
 sandbox_sdk.egg-info/
+.pytest_cache/
