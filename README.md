@@ -1,13 +1,63 @@
 # Sandbox RLS
 
-A sandbox infrastructure service for AI Agents with fine-grained file permission control.
+Fine-grained filesystem permissions for AI agent sandboxes.
+
+Sandbox RLS lets you run untrusted (or simply “not fully trusted”) AI agent code **against a real codebase** while enforcing **path-based, least-privilege access** at the file level.
+
+## Why this exists (the pain)
+
+When you give an agent a repository, you usually end up with one of these bad choices:
+
+- **All-or-nothing access**: the agent can read everything (including secrets) if it needs to edit docs or run tests.
+- **Coarse container isolation**: the process is isolated, but the mounted workspace is still basically “full trust”.
+- **Brittle ad-hoc filtering**: you try to strip files out of prompts, but the agent can still read them at runtime.
+
+Sandbox RLS is built for the missing middle ground: **“You can edit `/docs`, you can *see* `/metadata`, you can read everything else, and `/secrets` does not exist.”**
+
+## What you get
+
+- **Four permission levels**: `none` / `view` / `read` / `write`
+- **Glob + prefix patterns** with deterministic priority (more specific rules win)
+- **Multi-agent sharing**: multiple sandboxes can mount the same codebase with different rules
+- **Fast startup**: lightweight isolation based on bubblewrap (`bwrap`)
+
+## 30-second example (Python SDK)
+
+Give an agent a real repo, but only let it write docs, list metadata, and never see secrets:
+
+```python
+sandbox = client.create_sandbox(
+    codebase_id=codebase.id,
+    permissions=[
+        # Default: read-only for all files
+        {"pattern": "**/*", "permission": "read"},
+        # /docs directory: writable
+        {"pattern": "/docs/**", "permission": "write"},
+        # /metadata directory: view-only (can see filename, cannot read content)
+        {"pattern": "/metadata/**", "permission": "view"},
+        # /secrets directory: completely hidden (invisible)
+        {"pattern": "/secrets/**", "permission": "none"},
+    ]
+)
+```
+
+## Permission model (at a glance)
+
+| Level | What the agent can do |
+|-------|------------------------|
+| `none`  | Path is **invisible** (not shown in `ls`, behaves like it doesn’t exist) |
+| `view`  | Can **list** names (e.g. `ls`), but cannot read file content |
+| `read`  | Can read file content |
+| `write` | Can read + modify / create files |
+
+Rule priority: **more specific wins** (file-level > directory-level > glob).
 
 ## Features
 
-- **Fine-grained Permission Control**: Support none/view/read/write four-level permissions with glob patterns, directory-level, and file-level priority override
-- **Lightweight Isolation**: Based on bubblewrap (bwrap) for millisecond-level sandbox startup
-- **Runtime Abstraction**: Extensible architecture supporting future migration to Docker/gVisor
-- **Multi-Sandbox Codebase Sharing**: Same folder can be accessed by multiple Agents with different permissions
+- **Fine-grained permission control**: `none` / `view` / `read` / `write` with glob patterns and deterministic priority rules
+- **Lightweight isolation**: bubblewrap (`bwrap`) runtime for fast sandbox startup
+- **Runtime abstraction**: extensible design (future Docker/gVisor support)
+- **Multi-sandbox codebase sharing**: same folder can be mounted by multiple agents with different permissions
 
 ## Architecture
 
@@ -320,6 +370,8 @@ func main() {
 
 To see the permission system in action:
 
+> Note: the REST API uses enum-style values like `PERMISSION_READ`, while the SDKs use string values like `read` / `write` / `view` / `none`.
+
 ```bash
 # Create a codebase and upload sensitive files
 curl -X POST http://localhost:8080/v1/codebases \
@@ -401,19 +453,6 @@ This project follows TDD (Test-Driven Development):
 1. **RED**: Write a failing test
 2. **GREEN**: Write minimal code to pass
 3. **REFACTOR**: Improve code quality
-
-## Permission Model
-
-Four permission levels:
-
-| Level | Description |
-|-------|-------------|
-| `none` | Completely invisible, not shown in `ls` |
-| `view` | Visible in `ls`, but cannot read content |
-| `read` | Can read file content |
-| `write` | Can modify file |
-
-Priority: File-level > Directory-level > Glob pattern
 
 ## License
 
