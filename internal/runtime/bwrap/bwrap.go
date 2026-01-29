@@ -173,22 +173,28 @@ func (r *BwrapRuntime) Start(ctx context.Context, sandboxID string) error {
 		fuseReady := make(chan error, 1)
 
 		go func() {
-			// Signal that we're starting
-			fuseReady <- nil
-			// This blocks until fuseCtx is cancelled
-			if err := sandboxFS.Mount(fuseCtx); err != nil && err != context.Canceled {
+			// This blocks until fuseCtx is cancelled, but signals ready via channel
+			if err := sandboxFS.MountWithReady(fuseCtx, fuseReady); err != nil && err != context.Canceled {
 				// Log error but don't fail - the context was cancelled
 				fmt.Printf("FUSE mount error for sandbox %s: %v\n", sandboxID, err)
 			}
 		}()
 
-		// Wait for FUSE mount goroutine to start
-		<-fuseReady
+		// Wait for FUSE mount to be ready (with timeout)
+		select {
+		case err := <-fuseReady:
+			if err != nil {
+				fuseCancel()
+				os.RemoveAll(fuseMountPoint)
+				return fmt.Errorf("FUSE mount failed: %w", err)
+			}
+		case <-time.After(5 * time.Second):
+			fuseCancel()
+			os.RemoveAll(fuseMountPoint)
+			return fmt.Errorf("FUSE mount timeout")
+		}
 
-		// Give FUSE a moment to actually mount
-		time.Sleep(100 * time.Millisecond)
-
-		// Verify FUSE mounted successfully
+		// Double check FUSE is mounted
 		if !sandboxFS.IsMounted() {
 			fuseCancel()
 			os.RemoveAll(fuseMountPoint)

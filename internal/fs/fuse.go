@@ -4,7 +4,6 @@ package fs
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,7 +64,14 @@ func NewSandboxFS(config *SandboxFSConfig) (*SandboxFS, error) {
 }
 
 // Mount mounts the FUSE filesystem. It blocks until the context is cancelled.
+// If ready channel is provided, it receives nil when mount is ready, or an error if mount failed.
 func (sfs *SandboxFS) Mount(ctx context.Context) error {
+	return sfs.MountWithReady(ctx, nil)
+}
+
+// MountWithReady mounts the FUSE filesystem with a ready signal channel.
+// The ready channel receives nil when mount succeeds, or an error if mount failed.
+func (sfs *SandboxFS) MountWithReady(ctx context.Context, ready chan<- error) error {
 	root := &sandboxRoot{
 		sfs:       sfs,
 		sourceDir: sfs.config.SourceDir,
@@ -76,12 +82,15 @@ func (sfs *SandboxFS) Mount(ctx context.Context) error {
 			AllowOther: true, // Allow bwrap processes to access the mount
 			FsName:     "sandboxfs",
 			Name:       "sandboxfs",
-			Debug:      false,
+			Debug:      false, // Disable debug for production
 		},
 	}
 
 	server, err := fs.Mount(sfs.config.MountPoint, root, opts)
 	if err != nil {
+		if ready != nil {
+			ready <- err
+		}
 		return err
 	}
 
@@ -89,6 +98,11 @@ func (sfs *SandboxFS) Mount(ctx context.Context) error {
 	sfs.server = server
 	sfs.mounted.Store(true)
 	sfs.mu.Unlock()
+
+	// Signal that mount is ready
+	if ready != nil {
+		ready <- nil
+	}
 
 	// Wait for context cancellation
 	<-ctx.Done()
@@ -391,14 +405,17 @@ func (r *sandboxRoot) Create(ctx context.Context, name string, flags uint32, mod
 	}
 
 	sourcePath := r.sourcePath(name)
-	f, err := os.OpenFile(sourcePath, int(flags)|os.O_CREATE, os.FileMode(mode))
+
+	// Strip FUSE-specific flags and use syscall.Open
+	flags = flags &^ FMODE_EXEC
+	fd, err := syscall.Open(sourcePath, int(flags)|os.O_CREATE, mode)
 	if err != nil {
 		return nil, nil, 0, toErrno(err)
 	}
 
 	var st syscall.Stat_t
-	if err := syscall.Fstat(int(f.Fd()), &st); err != nil {
-		f.Close()
+	if err := syscall.Fstat(fd, &st); err != nil {
+		syscall.Close(fd)
 		return nil, nil, 0, syscall.EIO
 	}
 	out.Attr.FromStat(&st)
@@ -409,13 +426,7 @@ func (r *sandboxRoot) Create(ctx context.Context, name string, flags uint32, mod
 		virtualPath: virtualPath,
 	}
 
-	handle := &sandboxFileHandle{
-		file:        f,
-		virtualPath: virtualPath,
-		sfs:         r.sfs,
-	}
-
-	return r.NewInode(ctx, child, fs.StableAttr{Mode: fuse.S_IFREG}), handle, 0, fs.OK
+	return r.NewInode(ctx, child, fs.StableAttr{Mode: fuse.S_IFREG}), fs.NewLoopbackFile(fd), 0, fs.OK
 }
 
 // Symlink implements fs.NodeSymlinker.
@@ -680,14 +691,17 @@ func (d *sandboxDir) Create(ctx context.Context, name string, flags uint32, mode
 	}
 
 	sourcePath := filepath.Join(d.sourceDir, name)
-	f, err := os.OpenFile(sourcePath, int(flags)|os.O_CREATE, os.FileMode(mode))
+
+	// Strip FUSE-specific flags and use syscall.Open
+	flags = flags &^ FMODE_EXEC
+	fd, err := syscall.Open(sourcePath, int(flags)|os.O_CREATE, mode)
 	if err != nil {
 		return nil, nil, 0, toErrno(err)
 	}
 
 	var st syscall.Stat_t
-	if err := syscall.Fstat(int(f.Fd()), &st); err != nil {
-		f.Close()
+	if err := syscall.Fstat(fd, &st); err != nil {
+		syscall.Close(fd)
 		return nil, nil, 0, syscall.EIO
 	}
 	out.Attr.FromStat(&st)
@@ -698,13 +712,7 @@ func (d *sandboxDir) Create(ctx context.Context, name string, flags uint32, mode
 		virtualPath: virtualPath,
 	}
 
-	handle := &sandboxFileHandle{
-		file:        f,
-		virtualPath: virtualPath,
-		sfs:         d.sfs,
-	}
-
-	return d.NewInode(ctx, child, fs.StableAttr{Mode: fuse.S_IFREG}), handle, 0, fs.OK
+	return d.NewInode(ctx, child, fs.StableAttr{Mode: fuse.S_IFREG}), fs.NewLoopbackFile(fd), 0, fs.OK
 }
 
 // sandboxFile represents a regular file in the sandbox filesystem.
@@ -769,6 +777,9 @@ func (f *sandboxFile) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.Se
 	return fs.OK
 }
 
+// FMODE_EXEC is a FUSE-specific flag that should be stripped before passing to OS
+const FMODE_EXEC = 0x20
+
 // Open implements fs.NodeOpener for files.
 func (f *sandboxFile) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	// Check permissions based on open flags
@@ -785,95 +796,18 @@ func (f *sandboxFile) Open(ctx context.Context, flags uint32) (fh fs.FileHandle,
 		}
 	}
 
-	// Filter flags to only include valid bits for os.OpenFile
-	// FUSE may pass additional flags that don't translate to OS flags
-	osFlags := int(accMode)
-	if flags&syscall.O_APPEND != 0 {
-		osFlags |= syscall.O_APPEND
-	}
-	if flags&syscall.O_TRUNC != 0 {
-		osFlags |= syscall.O_TRUNC
-	}
+	// Strip FUSE-specific flags that shouldn't be passed to the OS
+	// Following go-fuse's loopback implementation
+	flags = flags &^ (syscall.O_APPEND | FMODE_EXEC)
 
-	file, err := os.OpenFile(f.sourcePath, osFlags, 0)
+	// Use syscall.Open directly like go-fuse's loopback does
+	fd, err := syscall.Open(f.sourcePath, int(flags), 0)
 	if err != nil {
 		return nil, 0, toErrno(err)
 	}
 
-	return &sandboxFileHandle{
-		file:        file,
-		virtualPath: f.virtualPath,
-		sfs:         f.sfs,
-	}, 0, fs.OK
-}
-
-// sandboxFileHandle represents an open file handle.
-type sandboxFileHandle struct {
-	file        *os.File
-	virtualPath string
-	sfs         *SandboxFS
-}
-
-var _ = (fs.FileReader)((*sandboxFileHandle)(nil))
-var _ = (fs.FileWriter)((*sandboxFileHandle)(nil))
-var _ = (fs.FileFlusher)((*sandboxFileHandle)(nil))
-var _ = (fs.FileReleaser)((*sandboxFileHandle)(nil))
-var _ = (fs.FileLseeker)((*sandboxFileHandle)(nil))
-var _ = (fs.FileGetattrer)((*sandboxFileHandle)(nil))
-
-// Read implements fs.FileReader.
-func (fh *sandboxFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	n, err := fh.file.ReadAt(dest, off)
-	// ReadAt returns io.EOF when reading at or past end of file
-	// This is normal behavior, not an error for FUSE
-	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, toErrno(err)
-	}
-	return fuse.ReadResultData(dest[:n]), fs.OK
-}
-
-// Write implements fs.FileWriter.
-func (fh *sandboxFileHandle) Write(ctx context.Context, data []byte, off int64) (written uint32, errno syscall.Errno) {
-	n, err := fh.file.WriteAt(data, off)
-	if err != nil {
-		return 0, toErrno(err)
-	}
-	return uint32(n), fs.OK
-}
-
-// Flush implements fs.FileFlusher.
-func (fh *sandboxFileHandle) Flush(ctx context.Context) syscall.Errno {
-	if err := fh.file.Sync(); err != nil {
-		return toErrno(err)
-	}
-	return fs.OK
-}
-
-// Release implements fs.FileReleaser.
-func (fh *sandboxFileHandle) Release(ctx context.Context) syscall.Errno {
-	if err := fh.file.Close(); err != nil {
-		return toErrno(err)
-	}
-	return fs.OK
-}
-
-// Lseek implements fs.FileLseeker.
-func (fh *sandboxFileHandle) Lseek(ctx context.Context, off uint64, whence uint32) (uint64, syscall.Errno) {
-	newOff, err := fh.file.Seek(int64(off), int(whence))
-	if err != nil {
-		return 0, toErrno(err)
-	}
-	return uint64(newOff), fs.OK
-}
-
-// Getattr implements fs.FileGetattrer.
-func (fh *sandboxFileHandle) Getattr(ctx context.Context, out *fuse.AttrOut) syscall.Errno {
-	var st syscall.Stat_t
-	if err := syscall.Fstat(int(fh.file.Fd()), &st); err != nil {
-		return toErrno(err)
-	}
-	out.Attr.FromStat(&st)
-	return fs.OK
+	// Wrap with NewLoopbackFile for proper file handle management
+	return fs.NewLoopbackFile(fd), 0, fs.OK
 }
 
 // sandboxSymlink represents a symbolic link in the sandbox filesystem.
