@@ -83,8 +83,10 @@ The table below focuses on the agent-centric question: **can you safely run untr
 
 ## Roadmap
 
-- [ ] 1. **Go SDK Support**: first-class Go client (API parity with Python SDK)
-- [ ] 2. **Codebase for any data source**: mount non-filesystem data as a `Codebase` (e.g. REST APIs, RDB, JSON, S3, ...), so agents can work with them using standard filesystem operations
+- [ ] 1. **Go SDK support**: Provide a first-class Go client with full feature parity to the Python SDK
+- [ ] 2. **Universal codebase sources**: Support mounting any data source (e.g. REST APIs, RDB, JSON, S3, etc.) as a `Codebase` so agents can interact with them using standard filesystem operations
+- [ ] 3. **Multi-agent integration**: Enable multi-agent systems, starting with Anthropic AI integration
+- [ ] 4. **Docker runtime support**: Add Docker as an alternative runtime to provide standard environment support
 
 ## Architecture
 
