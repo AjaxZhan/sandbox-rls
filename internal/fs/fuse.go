@@ -4,7 +4,6 @@ package fs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -506,36 +505,24 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 	virtualPath := d.virtualPathFor(name)
 	sourcePath := filepath.Join(d.sourceDir, name)
 
-	fmt.Printf("[FUSE DEBUG] Lookup called: name=%q, virtualPath=%q, sourcePath=%q, d.sourceDir=%q\n", name, virtualPath, sourcePath, d.sourceDir)
-
 	// Check permission
 	perm := d.sfs.getPermission(virtualPath)
-	fmt.Printf("[FUSE DEBUG] Lookup permission for %q: %v\n", virtualPath, perm)
 	if perm == types.PermNone {
 		return nil, syscall.ENOENT
 	}
 
 	var st syscall.Stat_t
 	if err := syscall.Lstat(sourcePath, &st); err != nil {
-		fmt.Printf("[FUSE DEBUG] Lookup Lstat error for %q: %v\n", sourcePath, err)
 		return nil, syscall.ENOENT
 	}
 	out.Attr.FromStat(&st)
 
 	// Use S_IFMT mask to correctly extract the file type
-	// S_IFMT is 0170000, and file types are:
-	// S_IFDIR = 0040000 (directory)
-	// S_IFLNK = 0120000 (symbolic link)
-	// S_IFREG = 0100000 (regular file)
 	fileType := st.Mode & syscall.S_IFMT
-	fmt.Printf("[FUSE DEBUG] Lookup file type: mode=0%o, fileType=0%o, S_IFDIR=0%o, S_IFLNK=0%o, S_IFREG=0%o\n",
-		st.Mode, fileType, syscall.S_IFDIR, syscall.S_IFLNK, syscall.S_IFREG)
-
 	var child fs.InodeEmbedder
 	var stableAttr fs.StableAttr
 
 	if fileType == syscall.S_IFDIR {
-		fmt.Printf("[FUSE DEBUG] Lookup creating sandboxDir for %q\n", virtualPath)
 		child = &sandboxDir{
 			sandboxRoot: sandboxRoot{
 				sfs:       d.sfs,
@@ -545,7 +532,6 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 		}
 		stableAttr = fs.StableAttr{Mode: fuse.S_IFDIR}
 	} else if fileType == syscall.S_IFLNK {
-		fmt.Printf("[FUSE DEBUG] Lookup creating sandboxSymlink for %q\n", virtualPath)
 		child = &sandboxSymlink{
 			sfs:         d.sfs,
 			sourcePath:  sourcePath,
@@ -553,7 +539,6 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 		}
 		stableAttr = fs.StableAttr{Mode: fuse.S_IFLNK}
 	} else {
-		fmt.Printf("[FUSE DEBUG] Lookup creating sandboxFile for %q with sourcePath=%q\n", virtualPath, sourcePath)
 		child = &sandboxFile{
 			sfs:         d.sfs,
 			sourcePath:  sourcePath,
@@ -799,44 +784,29 @@ const FMODE_EXEC = 0x20
 
 // Open implements fs.NodeOpener for files.
 func (f *sandboxFile) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
-	fmt.Printf("[FUSE DEBUG] Open called: virtualPath=%q, sourcePath=%q, flags=0x%x\n", f.virtualPath, f.sourcePath, flags)
-
 	// Check permissions based on open flags
 	accMode := flags & syscall.O_ACCMODE
-	fmt.Printf("[FUSE DEBUG] Open accMode=0x%x (O_RDONLY=0x%x, O_WRONLY=0x%x, O_RDWR=0x%x)\n", accMode, syscall.O_RDONLY, syscall.O_WRONLY, syscall.O_RDWR)
 
 	switch accMode {
 	case syscall.O_RDONLY:
 		if err := f.sfs.checkRead(f.virtualPath); err != nil {
-			fmt.Printf("[FUSE DEBUG] Open permission denied for read: %v\n", err)
 			return nil, 0, syscall.EACCES
 		}
 	case syscall.O_WRONLY, syscall.O_RDWR:
 		if err := f.sfs.checkWrite(f.virtualPath); err != nil {
-			fmt.Printf("[FUSE DEBUG] Open permission denied for write: %v\n", err)
 			return nil, 0, syscall.EACCES
 		}
 	}
 
 	// Strip FUSE-specific flags that shouldn't be passed to the OS
-	// Following go-fuse's loopback implementation
 	flags = flags &^ (syscall.O_APPEND | FMODE_EXEC)
 
-	// Check if source file exists
-	if _, statErr := os.Stat(f.sourcePath); statErr != nil {
-		fmt.Printf("[FUSE DEBUG] Open source file stat error: %v\n", statErr)
-	}
-
 	// Use syscall.Open directly
-	fmt.Printf("[FUSE DEBUG] Open calling syscall.Open(%q, 0x%x, 0)\n", f.sourcePath, flags)
 	fd, err := syscall.Open(f.sourcePath, int(flags), 0)
 	if err != nil {
-		fmt.Printf("[FUSE DEBUG] Open syscall.Open failed: %v (errno=%d)\n", err, err)
 		return nil, 0, toErrno(err)
 	}
 
-	fmt.Printf("[FUSE DEBUG] Open success: fd=%d\n", fd)
-	// Use our own file handle implementation that doesn't rely on splice
 	return &sandboxFileHandle{fd: fd}, 0, fs.OK
 }
 
@@ -855,13 +825,10 @@ var _ = (fs.FileLseeker)((*sandboxFileHandle)(nil))
 
 // Read implements fs.FileReader using standard pread instead of splice.
 func (fh *sandboxFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	fmt.Printf("[FUSE DEBUG] Read called: fd=%d, destLen=%d, off=%d\n", fh.fd, len(dest), off)
 	n, err := syscall.Pread(fh.fd, dest, off)
 	if err != nil && err != syscall.Errno(0) {
-		fmt.Printf("[FUSE DEBUG] Read syscall.Pread failed: %v (errno=%d)\n", err, err)
 		return nil, toErrno(err)
 	}
-	fmt.Printf("[FUSE DEBUG] Read success: n=%d\n", n)
 	return fuse.ReadResultData(dest[:n]), fs.OK
 }
 
