@@ -469,9 +469,9 @@ This project follows TDD (Test-Driven Development):
 
 ## References
 
-- `https://jakobemmerling.de/posts/fuse-is-all-you-need/`
-- `https://github.com/tursodatabase/agentfs`
-- `https://github.com/anthropics/skills`
+- [FUSE is All You Need - Giving agents access to anything via filesystems](https://jakobemmerling.de/posts/fuse-is-all-you-need/)
+- [Tursodatabase's Agentfs](https://github.com/tursodatabase/agentfs)
+- [Anthropic's Agent Skill](https://github.com/anthropics/skills)
 
 ## License
 
