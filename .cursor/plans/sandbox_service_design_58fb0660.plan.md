@@ -34,13 +34,13 @@ todos:
     status: completed
   - id: trackC-gen-proto
     content: "Track C: 生成 gRPC 代码 (protoc + grpc-gateway)"
-    status: pending
+    status: completed
   - id: trackC-test-server
     content: "Track C [TDD]: 编写 gRPC Server 集成测试"
-    status: pending
+    status: completed
   - id: trackC-impl-server
     content: "Track C [实现]: 实现 gRPC Server handlers"
-    status: pending
+    status: completed
   - id: trackD-test-codebase
     content: "Track D [TDD]: 编写 Codebase 存储测试"
     status: completed
