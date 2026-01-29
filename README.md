@@ -125,7 +125,7 @@ cd sdk/python
 pip install -e .
 ```
 
-Then run this complete example:
+Then run this complete example that demonstrates all four permission levels:
 
 ```python
 from sandbox_sdk import SandboxClient
@@ -136,61 +136,133 @@ client = SandboxClient(endpoint="localhost:9000")
 # NOTE:
 # If you see empty stdout for ALL commands while exit_code is always 0,
 # your server is probably running with the "mock" runtime (it does NOT really execute commands).
-# Start the server with bwrap, for example:
+# Start the server with bwrap runtime:
 #   ./bin/sandbox-server -config configs/sandbox-server.yaml
 # or:
 #   ./bin/sandbox-server -runtime bwrap
 
-# Step 1: Create a codebase
-codebase = client.create_codebase(
-    name="my-project",
-    owner_id="user_001"
-)
+# ==================================================
+# Step 1: Create a codebase and upload test files
+# ==================================================
+codebase = client.create_codebase(name="permission-demo", owner_id="user_001")
 print(f"Created codebase: {codebase.id}")
 
-# Step 2: (Optional) Upload some files
-upload = client.upload_file(
-    codebase_id=codebase.id,
-    file_path="hello.txt",
-    content=b"Hello from sandbox!"
-)
-print(f"Uploaded: {upload.file_path} ({upload.size} bytes)")
+# Upload files for testing different permissions
+test_files = {
+    "public/readme.txt": b"This file is readable by everyone.",
+    "docs/guide.txt": b"This file is writable.",
+    "metadata/info.txt": b"This file is view-only (can see in ls, cannot read).",
+    "secrets/.env": b"DB_PASSWORD=super_secret_123",
+    "secrets/api_key.txt": b"sk-xxxxxxxxxxxx",
+}
+for path, content in test_files.items():
+    client.upload_file(codebase_id=codebase.id, file_path=path, content=content)
+    print(f"  Uploaded: {path}")
 
-# Step 3: Create a sandbox with permission rules
+# ==================================================
+# Step 2: Create sandbox with 4 permission levels
+# ==================================================
+# Permission priority: file > directory > glob (higher priority wins)
 sandbox = client.create_sandbox(
     codebase_id=codebase.id,
     permissions=[
-        {"pattern": "**/*", "permission": "read"},      # Default: read-only
-        {"pattern": "/docs/**", "permission": "write"}, # /docs: writable
-        {"pattern": "**/.env", "permission": "none"},   # .env files: hidden
+        # Default: read-only for all files
+        {"pattern": "**/*", "permission": "read"},
+        # /docs directory: writable
+        {"pattern": "/docs/**", "permission": "write"},
+        # /metadata directory: view-only (can see filename, cannot read content)
+        {"pattern": "/metadata/**", "permission": "view"},
+        # /secrets directory: completely hidden (invisible)
+        {"pattern": "/secrets/**", "permission": "none"},
     ]
 )
 print(f"Created sandbox: {sandbox.id}")
 
-# Step 4: Start the sandbox
 client.start_sandbox(sandbox.id)
-print("Sandbox started!")
+print("Sandbox started!\n")
 
-# Step 5: Execute commands
-result = client.exec(sandbox.id, command="cat /workspace/hello.txt")
-print(f"cat: exit_code={result.exit_code}")
-print(f"stdout: {result.stdout!r}")
-print(f"stderr: {result.stderr!r}")
+# Helper function
+def run_cmd(cmd, description):
+    result = client.exec(sandbox.id, command=cmd)
+    print(f"[{description}]")
+    print(f"  Command: {cmd}")
+    print(f"  Exit code: {result.exit_code}")
+    if result.stdout.strip():
+        print(f"  Stdout: {result.stdout.strip()}")
+    if result.stderr.strip():
+        print(f"  Stderr: {result.stderr.strip()}")
+    print()
+    return result
 
-result = client.exec(sandbox.id, command="ls -la /workspace")
-print(f"ls: exit_code={result.exit_code}")
-print(f"stdout:\n{result.stdout}")
-print(f"stderr: {result.stderr!r}")
+# ==================================================
+# Step 3: Test "read" permission (/public)
+# ==================================================
+print("=" * 50)
+print("TEST: 'read' permission (/public)")
+print("  - Can list files: YES")
+print("  - Can read content: YES")
+print("  - Can write: NO")
+print("=" * 50)
+run_cmd("ls /workspace/public", "List /public directory")
+run_cmd("cat /workspace/public/readme.txt", "Read file content")
+run_cmd("echo 'modified' > /workspace/public/readme.txt", "Try to write (should fail)")
 
-# Step 6: Try to write (should work in /docs)
-result = client.exec(sandbox.id, command="echo 'test' > /workspace/docs/note.txt")
-print(f"Write to /docs: exit_code={result.exit_code}, stderr={result.stderr!r}")
+# ==================================================
+# Step 4: Test "write" permission (/docs)
+# ==================================================
+print("=" * 50)
+print("TEST: 'write' permission (/docs)")
+print("  - Can list files: YES")
+print("  - Can read content: YES")
+print("  - Can write: YES")
+print("=" * 50)
+run_cmd("ls /workspace/docs", "List /docs directory")
+run_cmd("cat /workspace/docs/guide.txt", "Read file content")
+run_cmd("echo 'new content' > /workspace/docs/new_file.txt", "Create new file")
+run_cmd("cat /workspace/docs/new_file.txt", "Verify new file")
 
+# ==================================================
+# Step 5: Test "view" permission (/metadata)
+# ==================================================
+print("=" * 50)
+print("TEST: 'view' permission (/metadata)")
+print("  - Can list files: YES")
+print("  - Can read content: NO")
+print("  - Can write: NO")
+print("=" * 50)
+run_cmd("ls /workspace/metadata", "List /metadata directory (should see files)")
+run_cmd("cat /workspace/metadata/info.txt", "Try to read (should fail)")
+
+# ==================================================
+# Step 6: Test "none" permission (/secrets)
+# ==================================================
+print("=" * 50)
+print("TEST: 'none' permission (/secrets)")
+print("  - Can list files: NO (directory appears empty or missing)")
+print("  - Can read content: NO")
+print("  - Can write: NO")
+print("=" * 50)
+run_cmd("ls /workspace/secrets 2>&1 || echo 'Directory not accessible'", "List /secrets (should be hidden)")
+run_cmd("cat /workspace/secrets/.env", "Try to read .env (should fail)")
+run_cmd("ls /workspace", "List workspace root (secrets dir should NOT appear)")
+
+# ==================================================
 # Step 7: Clean up
+# ==================================================
+print("=" * 50)
 client.destroy_sandbox(sandbox.id)
 client.delete_codebase(codebase.id)
 print("Cleanup complete!")
 ```
+
+**Expected output summary:**
+
+| Permission | `ls` (list) | `cat` (read) | `echo >` (write) |
+|------------|-------------|--------------|------------------|
+| `none`     | ❌ Hidden   | ❌ ENOENT    | ❌ ENOENT        |
+| `view`     | ✅ Visible  | ❌ EACCES    | ❌ EACCES        |
+| `read`     | ✅ Visible  | ✅ Success   | ❌ EACCES        |
+| `write`    | ✅ Visible  | ✅ Success   | ✅ Success       |
 
 #### Option 3: Using Go SDK
 
