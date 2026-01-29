@@ -1,0 +1,39 @@
+# Sandbox Server Configuration
+
+server:
+  # gRPC server address
+  grpc_addr: ":9000"
+  # REST gateway address
+  http_addr: ":8080"
+
+storage:
+  # Base path for codebase storage
+  codebase_path: "/var/lib/sandbox/codebases"
+  # Base path for sandbox mount points
+  mount_path: "/var/lib/sandbox/mounts"
+  # Metadata database path
+  db_path: "/var/lib/sandbox/metadata.db"
+
+runtime:
+  # Runtime type: bwrap, docker
+  type: "bwrap"
+  # bwrap binary path
+  bwrap_path: "/usr/bin/bwrap"
+  # Default command timeout
+  default_timeout: "30s"
+  # Maximum command timeout
+  max_timeout: "10m"
+
+sandbox:
+  # Default sandbox expiration (0 = no expiration)
+  default_expiration: "24h"
+  # Maximum concurrent sandboxes per user
+  max_per_user: 10
+  # Cleanup interval for expired sandboxes
+  cleanup_interval: "5m"
+
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log format: json, text
+  format: "json"

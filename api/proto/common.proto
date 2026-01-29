@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package sandbox.v1;
+
+option go_package = "github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// Permission levels for file access
+enum Permission {
+  PERMISSION_UNSPECIFIED = 0;
+  PERMISSION_NONE = 1;   // Completely invisible
+  PERMISSION_VIEW = 2;   // Can see in ls, cannot read
+  PERMISSION_READ = 3;   // Can read content
+  PERMISSION_WRITE = 4;  // Can modify
+}
+
+// Pattern types for permission rules
+enum PatternType {
+  PATTERN_TYPE_UNSPECIFIED = 0;
+  PATTERN_TYPE_GLOB = 1;      // e.g., *.md, **/*.json
+  PATTERN_TYPE_DIRECTORY = 2; // e.g., /docs/
+  PATTERN_TYPE_FILE = 3;      // e.g., /config.yaml
+}
+
+// PermissionRule defines access control for files
+message PermissionRule {
+  string pattern = 1;        // Path pattern
+  PatternType type = 2;      // Pattern type
+  Permission permission = 3; // Access level
+  int32 priority = 4;        // Higher priority wins
+}
+
+// SandboxStatus represents the state of a sandbox
+enum SandboxStatus {
+  SANDBOX_STATUS_UNSPECIFIED = 0;
+  SANDBOX_STATUS_PENDING = 1;
+  SANDBOX_STATUS_RUNNING = 2;
+  SANDBOX_STATUS_STOPPED = 3;
+  SANDBOX_STATUS_ERROR = 4;
+}
+
+// Empty message for void returns
+message Empty {}

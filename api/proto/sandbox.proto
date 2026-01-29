@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package sandbox.v1;
+
+option go_package = "github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "common.proto";
+
+// SandboxService manages sandbox lifecycle and execution
+service SandboxService {
+  // CreateSandbox creates a new sandbox with specified configuration
+  rpc CreateSandbox(CreateSandboxRequest) returns (Sandbox) {
+    option (google.api.http) = {
+      post: "/v1/sandboxes"
+      body: "*"
+    };
+  }
+
+  // GetSandbox retrieves information about a sandbox
+  rpc GetSandbox(GetSandboxRequest) returns (Sandbox) {
+    option (google.api.http) = {
+      get: "/v1/sandboxes/{sandbox_id}"
+    };
+  }
+
+  // ListSandboxes lists all sandboxes
+  rpc ListSandboxes(ListSandboxesRequest) returns (ListSandboxesResponse) {
+    option (google.api.http) = {
+      get: "/v1/sandboxes"
+    };
+  }
+
+  // StartSandbox starts a pending sandbox
+  rpc StartSandbox(StartSandboxRequest) returns (Sandbox) {
+    option (google.api.http) = {
+      post: "/v1/sandboxes/{sandbox_id}/start"
+    };
+  }
+
+  // StopSandbox stops a running sandbox
+  rpc StopSandbox(StopSandboxRequest) returns (Sandbox) {
+    option (google.api.http) = {
+      post: "/v1/sandboxes/{sandbox_id}/stop"
+    };
+  }
+
+  // DestroySandbox destroys a sandbox and releases resources
+  rpc DestroySandbox(DestroySandboxRequest) returns (Empty) {
+    option (google.api.http) = {
+      delete: "/v1/sandboxes/{sandbox_id}"
+    };
+  }
+
+  // Exec executes a command in a sandbox
+  rpc Exec(ExecRequest) returns (ExecResult) {
+    option (google.api.http) = {
+      post: "/v1/sandboxes/{sandbox_id}/exec"
+      body: "*"
+    };
+  }
+
+  // ExecStream executes a command and streams output
+  rpc ExecStream(ExecRequest) returns (stream ExecOutput);
+}
+
+// Sandbox represents an isolated execution environment
+message Sandbox {
+  string id = 1;
+  string codebase_id = 2;
+  repeated PermissionRule permissions = 3;
+  SandboxStatus status = 4;
+  map<string, string> labels = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp stopped_at = 8;
+  google.protobuf.Timestamp expires_at = 9;
+}
+
+// CreateSandboxRequest
+message CreateSandboxRequest {
+  string codebase_id = 1;
+  repeated PermissionRule permissions = 2;
+  google.protobuf.Duration expires_in = 3;
+  map<string, string> labels = 4;
+}
+
+// GetSandboxRequest
+message GetSandboxRequest {
+  string sandbox_id = 1;
+}
+
+// ListSandboxesRequest
+message ListSandboxesRequest {
+  string codebase_id = 1; // Optional filter by codebase
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+// ListSandboxesResponse
+message ListSandboxesResponse {
+  repeated Sandbox sandboxes = 1;
+  string next_page_token = 2;
+}
+
+// StartSandboxRequest
+message StartSandboxRequest {
+  string sandbox_id = 1;
+}
+
+// StopSandboxRequest
+message StopSandboxRequest {
+  string sandbox_id = 1;
+}
+
+// DestroySandboxRequest
+message DestroySandboxRequest {
+  string sandbox_id = 1;
+}
+
+// ExecRequest represents a command execution request
+message ExecRequest {
+  string sandbox_id = 1;
+  string command = 2;
+  string stdin = 3;
+  map<string, string> env = 4;
+  string workdir = 5;
+  google.protobuf.Duration timeout = 6;
+}
+
+// ExecResult represents the result of command execution
+message ExecResult {
+  string stdout = 1;
+  string stderr = 2;
+  int32 exit_code = 3;
+  google.protobuf.Duration duration = 4;
+}
+
+// ExecOutput represents a chunk of streaming output
+message ExecOutput {
+  enum OutputType {
+    OUTPUT_TYPE_UNSPECIFIED = 0;
+    OUTPUT_TYPE_STDOUT = 1;
+    OUTPUT_TYPE_STDERR = 2;
+  }
+  OutputType type = 1;
+  bytes data = 2;
+}

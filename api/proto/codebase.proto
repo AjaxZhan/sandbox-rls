@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package sandbox.v1;
+
+option go_package = "github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+
+// CodebaseService manages user codebases (file folders)
+service CodebaseService {
+  // CreateCodebase creates a new codebase
+  rpc CreateCodebase(CreateCodebaseRequest) returns (Codebase) {
+    option (google.api.http) = {
+      post: "/v1/codebases"
+      body: "*"
+    };
+  }
+
+  // GetCodebase retrieves information about a codebase
+  rpc GetCodebase(GetCodebaseRequest) returns (Codebase) {
+    option (google.api.http) = {
+      get: "/v1/codebases/{codebase_id}"
+    };
+  }
+
+  // ListCodebases lists all codebases for an owner
+  rpc ListCodebases(ListCodebasesRequest) returns (ListCodebasesResponse) {
+    option (google.api.http) = {
+      get: "/v1/codebases"
+    };
+  }
+
+  // DeleteCodebase deletes a codebase
+  rpc DeleteCodebase(DeleteCodebaseRequest) returns (Empty) {
+    option (google.api.http) = {
+      delete: "/v1/codebases/{codebase_id}"
+    };
+  }
+
+  // UploadFiles uploads files to a codebase
+  rpc UploadFiles(stream UploadChunk) returns (UploadResult);
+
+  // DownloadFile downloads a file from a codebase
+  rpc DownloadFile(DownloadFileRequest) returns (stream FileChunk);
+
+  // ListFiles lists files in a codebase directory
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse) {
+    option (google.api.http) = {
+      get: "/v1/codebases/{codebase_id}/files"
+    };
+  }
+}
+
+// Codebase represents a user's file folder
+message Codebase {
+  string id = 1;
+  string name = 2;
+  string owner_id = 3;
+  int64 size = 4;           // Total size in bytes
+  int32 file_count = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// CreateCodebaseRequest
+message CreateCodebaseRequest {
+  string name = 1;
+  string owner_id = 2;
+}
+
+// GetCodebaseRequest
+message GetCodebaseRequest {
+  string codebase_id = 1;
+}
+
+// ListCodebasesRequest
+message ListCodebasesRequest {
+  string owner_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+// ListCodebasesResponse
+message ListCodebasesResponse {
+  repeated Codebase codebases = 1;
+  string next_page_token = 2;
+}
+
+// DeleteCodebaseRequest
+message DeleteCodebaseRequest {
+  string codebase_id = 1;
+}
+
+// UploadChunk represents a chunk of file being uploaded
+message UploadChunk {
+  // First chunk must include metadata
+  message Metadata {
+    string codebase_id = 1;
+    string file_path = 2;    // Relative path in codebase
+    int64 total_size = 3;
+  }
+  
+  oneof content {
+    Metadata metadata = 1;
+    bytes data = 2;
+  }
+}
+
+// UploadResult represents the result of file upload
+message UploadResult {
+  string codebase_id = 1;
+  string file_path = 2;
+  int64 size = 3;
+  string checksum = 4;  // MD5 or SHA256
+}
+
+// DownloadFileRequest
+message DownloadFileRequest {
+  string codebase_id = 1;
+  string file_path = 2;
+}
+
+// FileChunk represents a chunk of file being downloaded
+message FileChunk {
+  bytes data = 1;
+}
+
+// ListFilesRequest
+message ListFilesRequest {
+  string codebase_id = 1;
+  string path = 2;        // Directory path (empty for root)
+  bool recursive = 3;     // List recursively
+}
+
+// ListFilesResponse
+message ListFilesResponse {
+  repeated FileInfo files = 1;
+}
+
+// FileInfo represents information about a file
+message FileInfo {
+  string path = 1;
+  string name = 2;
+  bool is_dir = 3;
+  int64 size = 4;
+  google.protobuf.Timestamp modified_at = 5;
+}
