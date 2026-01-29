@@ -1,15 +1,17 @@
 #!/bin/bash
-# Generate Go code from protobuf definitions
+# Generate Go and Python code from protobuf definitions
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PROTO_DIR="$PROJECT_ROOT/api/proto"
-OUT_DIR="$PROJECT_ROOT/api/gen"
+GO_OUT_DIR="$PROJECT_ROOT/api/gen"
+PYTHON_OUT_DIR="$PROJECT_ROOT/sdk/python/sandbox_sdk/_gen"
 
-# Create output directory
-mkdir -p "$OUT_DIR"
+# Create output directories
+mkdir -p "$GO_OUT_DIR"
+mkdir -p "$PYTHON_OUT_DIR"
 
 # Check if protoc is installed
 if ! command -v protoc &> /dev/null; then
@@ -52,13 +54,73 @@ echo "Generating Go code from proto files..."
 protoc \
     --proto_path="$PROTO_DIR" \
     --proto_path="$PROJECT_ROOT/third_party" \
-    --go_out="$OUT_DIR" \
+    --go_out="$GO_OUT_DIR" \
     --go_opt=paths=source_relative \
-    --go-grpc_out="$OUT_DIR" \
+    --go-grpc_out="$GO_OUT_DIR" \
     --go-grpc_opt=paths=source_relative \
-    --grpc-gateway_out="$OUT_DIR" \
+    --grpc-gateway_out="$GO_OUT_DIR" \
     --grpc-gateway_opt=paths=source_relative \
     "$PROTO_DIR"/*.proto
 
-echo "Proto generation complete!"
-echo "Generated files in: $OUT_DIR"
+echo "Go proto generation complete!"
+echo "Generated files in: $GO_OUT_DIR"
+
+# ============================================
+# Python Code Generation
+# ============================================
+
+echo ""
+echo "Generating Python code from proto files..."
+
+PYTHON_SDK_DIR="$PROJECT_ROOT/sdk/python"
+PYTHON_VENV="$PYTHON_SDK_DIR/.venv"
+
+# Check if virtual environment exists, create if not
+if [ ! -d "$PYTHON_VENV" ]; then
+    echo "Creating Python virtual environment..."
+    python3 -m venv "$PYTHON_VENV"
+fi
+
+# Activate virtual environment
+source "$PYTHON_VENV/bin/activate"
+
+# Check if grpcio-tools is available
+if ! python -c "import grpc_tools.protoc" &> /dev/null; then
+    echo "Installing grpcio-tools..."
+    pip install grpcio grpcio-tools
+fi
+
+# Generate Python code
+python -m grpc_tools.protoc \
+    --proto_path="$PROTO_DIR" \
+    --proto_path="$PROJECT_ROOT/third_party" \
+    --python_out="$PYTHON_OUT_DIR" \
+    --pyi_out="$PYTHON_OUT_DIR" \
+    --grpc_python_out="$PYTHON_OUT_DIR" \
+    "$PROTO_DIR"/*.proto
+
+# Create __init__.py for the _gen package
+touch "$PYTHON_OUT_DIR/__init__.py"
+
+# Fix Python imports (replace absolute imports with relative imports)
+echo "Fixing Python imports..."
+for file in "$PYTHON_OUT_DIR"/*_pb2_grpc.py; do
+    if [ -f "$file" ]; then
+        # Replace 'import xxx_pb2' with 'from . import xxx_pb2'
+        sed -i.bak 's/^import \(.*_pb2\)/from . import \1/' "$file"
+        rm -f "${file}.bak"
+    fi
+done
+
+for file in "$PYTHON_OUT_DIR"/*_pb2.py; do
+    if [ -f "$file" ]; then
+        # Replace 'import common_pb2' with 'from . import common_pb2'
+        sed -i.bak 's/^import common_pb2/from . import common_pb2/' "$file"
+        rm -f "${file}.bak"
+    fi
+done
+
+echo "Python proto generation complete!"
+echo "Generated files in: $PYTHON_OUT_DIR"
+echo ""
+echo "All proto generation complete!"

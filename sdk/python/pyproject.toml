@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sandbox-sdk"
+version = "0.1.0"
+description = "Python SDK for Sandbox RLS - A sandbox infrastructure service for AI Agents with fine-grained file permission control"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ajax Zhan", email = "ajaxzhan@example.com"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["sandbox", "ai", "agent", "grpc", "isolation"]
+dependencies = [
+    "grpcio>=1.50.0",
+    "protobuf>=4.21.0",
+    "googleapis-common-protos>=1.60.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "grpcio-tools>=1.50.0",
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.0.260",
+]
+
+[project.urls]
+Homepage = "https://github.com/ajaxzhan/sandbox-rls"
+Documentation = "https://github.com/ajaxzhan/sandbox-rls#readme"
+Repository = "https://github.com/ajaxzhan/sandbox-rls"
+Issues = "https://github.com/ajaxzhan/sandbox-rls/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sandbox_sdk*"]
+
+[tool.setuptools.package-data]
+"sandbox_sdk._gen" = ["*.pyi"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]

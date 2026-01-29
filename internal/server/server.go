@@ -11,13 +11,17 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"sync"
 
 	pb "github.com/ajaxzhan/sandbox-rls/api/gen"
 	"github.com/ajaxzhan/sandbox-rls/internal/codebase"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime"
+	sbruntime "github.com/ajaxzhan/sandbox-rls/internal/runtime"
 	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -33,14 +37,16 @@ type Config struct {
 type Server struct {
 	config          *Config
 	grpcServer      *grpc.Server
+	httpServer      *http.Server
 	sandboxService  *SandboxServiceServer
 	codebaseService *CodebaseServiceServer
-	runtime         runtime.RuntimeWithExecutor
+	sbRuntime       sbruntime.RuntimeWithExecutor
 	codebaseManager *codebase.Manager
+	mu              sync.Mutex
 }
 
 // New creates a new gRPC server.
-func New(cfg *Config, rt runtime.RuntimeWithExecutor, cbManager *codebase.Manager) (*Server, error) {
+func New(cfg *Config, rt sbruntime.RuntimeWithExecutor, cbManager *codebase.Manager) (*Server, error) {
 	if cfg == nil {
 		return nil, errors.New("config is required")
 	}
@@ -63,7 +69,7 @@ func New(cfg *Config, rt runtime.RuntimeWithExecutor, cbManager *codebase.Manage
 		grpcServer:      grpcServer,
 		sandboxService:  sandboxSvc,
 		codebaseService: codebaseSvc,
-		runtime:         rt,
+		sbRuntime:       rt,
 		codebaseManager: cbManager,
 	}, nil
 }
@@ -80,7 +86,65 @@ func (s *Server) Start() error {
 
 // Stop gracefully stops the server.
 func (s *Server) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.httpServer != nil {
+		s.httpServer.Close()
+	}
 	s.grpcServer.GracefulStop()
+}
+
+// StartWithGateway starts both gRPC and REST gateway servers.
+func (s *Server) StartWithGateway() error {
+	// Start gRPC server in background
+	grpcLis, err := net.Listen("tcp", s.config.GRPCAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on gRPC address: %w", err)
+	}
+
+	errCh := make(chan error, 2)
+
+	go func() {
+		if err := s.grpcServer.Serve(grpcLis); err != nil {
+			errCh <- fmt.Errorf("gRPC server error: %w", err)
+		}
+	}()
+
+	// Create REST gateway mux
+	ctx := context.Background()
+	mux := runtime.NewServeMux()
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+
+	// Register sandbox service handler
+	err = pb.RegisterSandboxServiceHandlerFromEndpoint(ctx, mux, s.config.GRPCAddr, opts)
+	if err != nil {
+		return fmt.Errorf("failed to register sandbox service gateway: %w", err)
+	}
+
+	// Register codebase service handler
+	err = pb.RegisterCodebaseServiceHandlerFromEndpoint(ctx, mux, s.config.GRPCAddr, opts)
+	if err != nil {
+		return fmt.Errorf("failed to register codebase service gateway: %w", err)
+	}
+
+	// Create HTTP server
+	s.mu.Lock()
+	s.httpServer = &http.Server{
+		Addr:    s.config.RESTAddr,
+		Handler: mux,
+	}
+	s.mu.Unlock()
+
+	// Start HTTP server
+	go func() {
+		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- fmt.Errorf("HTTP server error: %w", err)
+		}
+	}()
+
+	// Wait for an error from either server
+	return <-errCh
 }
 
 // ============================================
@@ -90,12 +154,12 @@ func (s *Server) Stop() {
 // SandboxServiceServer implements the SandboxService gRPC interface.
 type SandboxServiceServer struct {
 	pb.UnimplementedSandboxServiceServer
-	runtime         runtime.RuntimeWithExecutor
+	runtime         sbruntime.RuntimeWithExecutor
 	codebaseManager *codebase.Manager
 }
 
 // NewSandboxServiceServer creates a new SandboxServiceServer.
-func NewSandboxServiceServer(rt runtime.RuntimeWithExecutor, cbManager *codebase.Manager) *SandboxServiceServer {
+func NewSandboxServiceServer(rt sbruntime.RuntimeWithExecutor, cbManager *codebase.Manager) *SandboxServiceServer {
 	return &SandboxServiceServer{
 		runtime:         rt,
 		codebaseManager: cbManager,
@@ -136,7 +200,7 @@ func (s *SandboxServiceServer) CreateSandbox(ctx context.Context, req *pb.Create
 	}
 
 	// Create sandbox config
-	config := &runtime.SandboxConfig{
+	config := &sbruntime.SandboxConfig{
 		ID:           generateSandboxID(),
 		CodebaseID:   req.CodebaseId,
 		CodebasePath: cb.Path,
