@@ -133,6 +133,14 @@ from sandbox_sdk import SandboxClient
 # Connect to the server (gRPC endpoint)
 client = SandboxClient(endpoint="localhost:9000")
 
+# NOTE:
+# If you see empty stdout for ALL commands while exit_code is always 0,
+# your server is probably running with the "mock" runtime (it does NOT really execute commands).
+# Start the server with bwrap, for example:
+#   ./bin/sandbox-server -config configs/sandbox-server.yaml
+# or:
+#   ./bin/sandbox-server -runtime bwrap
+
 # Step 1: Create a codebase
 codebase = client.create_codebase(
     name="my-project",
@@ -141,11 +149,12 @@ codebase = client.create_codebase(
 print(f"Created codebase: {codebase.id}")
 
 # Step 2: (Optional) Upload some files
-client.upload_file(
+upload = client.upload_file(
     codebase_id=codebase.id,
     file_path="hello.txt",
     content=b"Hello from sandbox!"
 )
+print(f"Uploaded: {upload.file_path} ({upload.size} bytes)")
 
 # Step 3: Create a sandbox with permission rules
 sandbox = client.create_sandbox(
@@ -164,14 +173,18 @@ print("Sandbox started!")
 
 # Step 5: Execute commands
 result = client.exec(sandbox.id, command="cat /workspace/hello.txt")
-print(f"Output: {result.stdout}")
+print(f"cat: exit_code={result.exit_code}")
+print(f"stdout: {result.stdout!r}")
+print(f"stderr: {result.stderr!r}")
 
 result = client.exec(sandbox.id, command="ls -la /workspace")
-print(f"Files:\n{result.stdout}")
+print(f"ls: exit_code={result.exit_code}")
+print(f"stdout:\n{result.stdout}")
+print(f"stderr: {result.stderr!r}")
 
 # Step 6: Try to write (should work in /docs)
 result = client.exec(sandbox.id, command="echo 'test' > /workspace/docs/note.txt")
-print(f"Write to /docs: exit_code={result.exit_code}")
+print(f"Write to /docs: exit_code={result.exit_code}, stderr={result.stderr!r}")
 
 # Step 7: Clean up
 client.destroy_sandbox(sandbox.id)
