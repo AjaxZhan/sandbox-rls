@@ -4,6 +4,7 @@ package fs
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -784,7 +785,17 @@ func (f *sandboxFile) Open(ctx context.Context, flags uint32) (fh fs.FileHandle,
 		}
 	}
 
-	file, err := os.OpenFile(f.sourcePath, int(flags), 0)
+	// Filter flags to only include valid bits for os.OpenFile
+	// FUSE may pass additional flags that don't translate to OS flags
+	osFlags := int(accMode)
+	if flags&syscall.O_APPEND != 0 {
+		osFlags |= syscall.O_APPEND
+	}
+	if flags&syscall.O_TRUNC != 0 {
+		osFlags |= syscall.O_TRUNC
+	}
+
+	file, err := os.OpenFile(f.sourcePath, osFlags, 0)
 	if err != nil {
 		return nil, 0, toErrno(err)
 	}
@@ -813,7 +824,9 @@ var _ = (fs.FileGetattrer)((*sandboxFileHandle)(nil))
 // Read implements fs.FileReader.
 func (fh *sandboxFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	n, err := fh.file.ReadAt(dest, off)
-	if err != nil && err.Error() != "EOF" {
+	// ReadAt returns io.EOF when reading at or past end of file
+	// This is normal behavior, not an error for FUSE
+	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, toErrno(err)
 	}
 	return fuse.ReadResultData(dest[:n]), fs.OK
