@@ -22,16 +22,16 @@ todos:
     status: pending
   - id: trackB-test-permission
     content: "Track B [TDD]: 编写权限引擎测试 (四级权限 + 优先级匹配)"
-    status: pending
+    status: completed
   - id: trackB-impl-permission
     content: "Track B [实现]: 实现 PermissionEngine"
-    status: pending
+    status: completed
   - id: trackB-test-fuse
     content: "Track B [TDD]: 编写 FUSE 文件系统测试 (ReadDir/Read/Write 权限拦截)"
-    status: pending
+    status: completed
   - id: trackB-impl-fuse
     content: "Track B [实现]: 实现 SandboxFS (FUSE 文件系统)"
-    status: pending
+    status: completed
   - id: trackC-gen-proto
     content: "Track C: 生成 gRPC 代码 (protoc + grpc-gateway)"
     status: pending
@@ -43,10 +43,10 @@ todos:
     status: pending
   - id: trackD-test-codebase
     content: "Track D [TDD]: 编写 Codebase 存储测试"
-    status: pending
+    status: completed
   - id: trackD-impl-codebase
     content: "Track D [实现]: 实现 Codebase Manager (文件存储)"
-    status: pending
+    status: completed
   - id: phase2-integration
     content: "Phase 2: 端到端集成测试 (完整流程验证)"
     status: pending
