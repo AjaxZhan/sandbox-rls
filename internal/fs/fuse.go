@@ -220,11 +220,12 @@ func (r *sandboxRoot) Lookup(ctx context.Context, name string, out *fuse.EntryOu
 	out.Attr.FromStat(&st)
 
 	// Create appropriate node based on file type
-	mode := st.Mode
+	// Use S_IFMT mask to correctly extract the file type
+	fileType := st.Mode & syscall.S_IFMT
 	var child fs.InodeEmbedder
 	var stableAttr fs.StableAttr
 
-	if mode&syscall.S_IFDIR != 0 {
+	if fileType == syscall.S_IFDIR {
 		// Directory
 		child = &sandboxDir{
 			sandboxRoot: sandboxRoot{
@@ -234,7 +235,7 @@ func (r *sandboxRoot) Lookup(ctx context.Context, name string, out *fuse.EntryOu
 			virtualPath: virtualPath,
 		}
 		stableAttr = fs.StableAttr{Mode: fuse.S_IFDIR}
-	} else if mode&syscall.S_IFLNK != 0 {
+	} else if fileType == syscall.S_IFLNK {
 		// Symlink
 		child = &sandboxSymlink{
 			sfs:         r.sfs,
@@ -521,11 +522,19 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 	}
 	out.Attr.FromStat(&st)
 
-	mode := st.Mode
+	// Use S_IFMT mask to correctly extract the file type
+	// S_IFMT is 0170000, and file types are:
+	// S_IFDIR = 0040000 (directory)
+	// S_IFLNK = 0120000 (symbolic link)
+	// S_IFREG = 0100000 (regular file)
+	fileType := st.Mode & syscall.S_IFMT
+	fmt.Printf("[FUSE DEBUG] Lookup file type: mode=0%o, fileType=0%o, S_IFDIR=0%o, S_IFLNK=0%o, S_IFREG=0%o\n",
+		st.Mode, fileType, syscall.S_IFDIR, syscall.S_IFLNK, syscall.S_IFREG)
+
 	var child fs.InodeEmbedder
 	var stableAttr fs.StableAttr
 
-	if mode&syscall.S_IFDIR != 0 {
+	if fileType == syscall.S_IFDIR {
 		fmt.Printf("[FUSE DEBUG] Lookup creating sandboxDir for %q\n", virtualPath)
 		child = &sandboxDir{
 			sandboxRoot: sandboxRoot{
@@ -535,7 +544,7 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 			virtualPath: virtualPath,
 		}
 		stableAttr = fs.StableAttr{Mode: fuse.S_IFDIR}
-	} else if mode&syscall.S_IFLNK != 0 {
+	} else if fileType == syscall.S_IFLNK {
 		fmt.Printf("[FUSE DEBUG] Lookup creating sandboxSymlink for %q\n", virtualPath)
 		child = &sandboxSymlink{
 			sfs:         d.sfs,
