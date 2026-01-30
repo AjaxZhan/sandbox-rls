@@ -20,19 +20,20 @@
 
 | 功能 | 说明 |
 |------|------|
-| 细粒度权限控制 | FUSE 文件系统层面的 `none/view/read/write` 四级权限 |
-| Glob 模式匹配 | 支持 `**/*.py`、`/secrets/**` 等模式 |
-| bwrap 隔离 | 基于 bubblewrap 的 namespace 隔离 |
-| 多沙箱共享 Codebase | 同一份代码可被多个 Agent 以不同权限访问 |
-| Python SDK | 完整的 Python 客户端 |
-| gRPC + REST API | 双协议支持 |
+| **细粒度权限控制** | FUSE 文件系统层面的 `none/view/read/write` 四级权限 |
+| **Glob 模式匹配** | 支持 `**/*.py`、`/secrets/**` 等模式 |
+| **bwrap 隔离** | 基于 bubblewrap 的 namespace 隔离 |
+| **多沙箱共享 Codebase** | 同一份代码可被多个 Agent 以不同权限访问 |
+| **Python SDK** | 完整的 Python 客户端 |
+| **gRPC + REST API** | 双协议支持 |
+| **Session 支持** | 有状态 shell sessions，保持工作目录、环境变量 |
+| **Docker Runtime** | 可选的 Docker 隔离，支持自定义镜像 |
+| **资源限制** | 内存、CPU、进程数限制 |
 
 ### 主要缺陷 ❌
 
 | 问题 | 影响 |
 |------|------|
-| **无 Session 支持** | Agent 无法保持状态（工作目录、环境变量、后台进程） |
-| **无资源限制** | 恶意代码可能耗尽系统资源 |
 | **bwrap 隔离较弱** | 不适合运行完全不可信的代码 |
 | **单机架构** | 无法水平扩展 |
 
@@ -40,48 +41,49 @@
 
 ## 开发路线
 
-### Phase 1: 核心功能完善（优先级最高）
+### Phase 1: 核心功能完善 ✅ 已完成
 
 让 Sandbox 能真正支持 Agent 的日常开发任务。
 
-#### 1.1 Session 支持
+#### 1.1 Session 支持 ✅
 
-**问题**：当前每次 `exec()` 都是独立进程，无法保持状态。
+**已实现**：有状态的 shell sessions，支持工作目录和环境变量保持。
 
 ```python
-# 当前的问题
-sandbox.exec("cd /workspace")      # 进程1
-sandbox.exec("npm install")        # 进程2：不在 /workspace！
-
-# 目标
+# 创建 session
 session = sandbox.create_session()
 session.exec("cd /workspace")      # 状态保持
 session.exec("npm install")        # ✅ 在 /workspace 执行
-session.exec("npm run dev &")      # ✅ 后台进程不会被杀
+session.exec("export FOO=bar")     # ✅ 环境变量保持
+session.exec("echo $FOO")          # ✅ 输出 bar
 ```
 
-**实现要点**：
+**实现细节**：
 - 长期运行的 shell 进程（`/bin/bash`）
 - PTY 支持（用于交互式命令）
 - 进程组管理（清理后台进程）
+- Session 生命周期管理（创建、关闭、自动清理）
 
-#### 1.2 资源限制（cgroups v2）
+#### 1.2 资源限制 ✅
 
-**问题**：恶意或有 bug 的代码可能耗尽系统资源。
+**已实现**：通过 Docker runtime 支持资源限制。
 
-```yaml
-# 目标配置
-resources:
-  memory: 512M      # 内存限制
-  cpu: 1.0          # CPU 核心数
-  pids: 100         # 最大进程数
-  io_weight: 100    # IO 权重
+```python
+# 创建带资源限制的沙箱
+sandbox = client.create_sandbox(
+    codebase_id=codebase.id,
+    resource_limits={
+        "memory_bytes": 512 * 1024 * 1024,  # 512MB
+        "cpu_millicores": 1000,              # 1 CPU
+        "max_pids": 100,                     # 最大进程数
+    }
+)
 ```
 
-**实现要点**：
-- 使用 cgroups v2（统一层级）
-- 集成到 bwrap/Docker runtime
-- 支持运行时动态调整
+**实现细节**：
+- 通过 Docker 容器实现资源隔离
+- 支持内存、CPU、进程数限制
+- 可在创建时指定
 
 #### 1.3 命令超时与熔断
 
@@ -100,26 +102,29 @@ if result.timed_out:
 
 提升安全性和易用性。
 
-#### 2.1 Docker Runtime
+#### 2.1 Docker Runtime ✅
 
-**为什么需要**：
-- 更强的隔离边界
-- 标准化环境（可指定镜像）
-- 更好的生态支持
+**已实现**：完整的 Docker 隔离支持。
 
 ```python
-# 目标
+# 使用 Docker runtime
 sandbox = client.create_sandbox(
     codebase_id=codebase.id,
     runtime="docker",
     image="python:3.11-slim",  # 指定运行环境
+    resource_limits={
+        "memory_bytes": 512 * 1024 * 1024,
+        "cpu_millicores": 1000,
+    }
 )
 ```
 
-**实现要点**：
+**实现细节**：
 - 实现 `runtime.Runtime` 接口的 Docker 版本
 - 支持自定义镜像
-- FUSE 挂载到容器内部
+- Codebase 目录挂载到容器内部
+- 完整的 Session 支持（与 bwrap 一致）
+- 容器生命周期管理
 
 #### 2.2 一键启动 API
 
@@ -316,9 +321,9 @@ sandbox = pool.acquire()  # 毫秒级获取
 | 版本 | 主要内容 | 状态 |
 |------|----------|------|
 | v0.1 | 基础功能：权限控制、bwrap 隔离、Python SDK | ✅ 已完成 |
-| v0.2 | Session 支持、资源限制 | 📋 计划中 |
-| v0.3 | Docker Runtime、CLI 工具 | 📋 计划中 |
-| v0.4 | 一键启动 API、预设模板 | 📋 计划中 |
+| v0.2 | Session 支持、资源限制 | ✅ 已完成 |
+| v0.3 | Docker Runtime | ✅ 已完成 |
+| v0.4 | 一键启动 API、预设模板、CLI 工具 | 📋 计划中 |
 | v0.5 | Go SDK、配置文件支持 | 📋 计划中 |
 | v1.0 | 多 Agent 协作、生产就绪 | 📋 计划中 |
 

@@ -64,7 +64,9 @@ Rule priority: **more specific wins** (file-level > directory-level > glob).
 
 - **Fine-grained permission control**: `none` / `view` / `read` / `write` with glob patterns and deterministic priority rules
 - **Lightweight isolation**: bubblewrap (`bwrap`) runtime for fast sandbox startup
-- **Runtime abstraction**: extensible design (future Docker/gVisor support)
+- **Docker runtime**: optional Docker-based isolation with custom image support and resource limits
+- **Stateful sessions**: persistent shell sessions that maintain working directory and environment variables
+- **Resource limits**: memory, CPU, and process count limits (via Docker runtime)
 - **Multi-sandbox codebase sharing**: same folder can be mounted by multiple agents with different permissions
 
 ## Comparison
@@ -85,12 +87,19 @@ The table below focuses on the agent-centric question: **can you safely run untr
 
 See [ROADMAP.md](ROADMAP.md) for the detailed development plan.
 
+**Completed:**
+
+| Feature | Status |
+|---------|--------|
+| Session support | ✅ Stateful shell sessions with working directory and env var persistence |
+| Docker runtime | ✅ Full Docker isolation with custom image support |
+| Resource limits | ✅ Memory, CPU, and process count limits |
+
 **Current priorities:**
 
 | Phase | Focus | Key Features |
 |-------|-------|--------------|
-| **Phase 1** | Core functionality | Session support, resource limits (cgroups v2), timeout/circuit breaker |
-| **Phase 2** | Isolation + DX | Docker runtime, one-liner API, permission presets, CLI tool, Go SDK |
+| **Phase 2** | Developer Experience | One-liner API, permission presets, CLI tool, Go SDK |
 | **Phase 3** | Multi-agent | File locking, agent communication, external data sources |
 
 **What we're NOT building** (out of scope):
@@ -118,7 +127,7 @@ See [ROADMAP.md](ROADMAP.md) for the detailed development plan.
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                   Isolation Layer                           │
-│              bwrap Runtime │ FUSE FileSystem                │
+│       bwrap Runtime │ Docker Runtime │ FUSE FileSystem      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -455,8 +464,9 @@ sandbox-rls/
 │   ├── server/          # gRPC + REST server
 │   ├── sandbox/         # Core business logic
 │   ├── runtime/         # Runtime abstraction layer
-│   │   ├── bwrap/       # bubblewrap implementation
-│   │   └── docker/      # Docker implementation (reserved)
+│   │   ├── bwrap/       # bubblewrap implementation (with session support)
+│   │   ├── docker/      # Docker implementation (with session & resource limits)
+│   │   └── mock/        # Mock runtime for testing
 │   ├── fs/              # FUSE filesystem
 │   └── codebase/        # Codebase management
 ├── pkg/types/           # Public types
