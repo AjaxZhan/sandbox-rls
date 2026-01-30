@@ -50,13 +50,14 @@ func DefaultConfig() *Config {
 
 // sandboxState holds internal state for a sandbox.
 type sandboxState struct {
-	sandbox    *types.Sandbox
-	config     *rt.SandboxConfig
-	cmd        *exec.Cmd // The running process (if any)
-	cancel     context.CancelFunc
-	fuseFS     *fs.SandboxFS      // FUSE filesystem instance
-	fuseCancel context.CancelFunc // Cancel function for FUSE mount
-	fuseMountPoint string          // Path where FUSE is mounted
+	sandbox        *types.Sandbox
+	config         *rt.SandboxConfig
+	cmd            *exec.Cmd          // The running process (if any)
+	cancel         context.CancelFunc
+	fuseFS         *fs.SandboxFS      // FUSE filesystem instance
+	fuseCancel     context.CancelFunc // Cancel function for FUSE mount
+	fuseMountPoint string             // Path where FUSE is mounted
+	deltaDir       string             // Delta directory path for COW
 }
 
 // BwrapRuntime implements runtime.RuntimeWithExecutor using bubblewrap.
@@ -156,9 +157,18 @@ func (r *BwrapRuntime) Start(ctx context.Context, sandboxID string) error {
 			return fmt.Errorf("failed to create FUSE mount point: %w", err)
 		}
 
-		// Create FUSE filesystem with permission rules
+		// Create Delta directory for COW support
+		deltaDir := filepath.Join(r.config.WorkDir, "delta", sandboxID)
+		if err := os.MkdirAll(deltaDir, 0755); err != nil {
+			os.RemoveAll(fuseMountPoint)
+			return fmt.Errorf("failed to create delta dir: %w", err)
+		}
+		state.deltaDir = deltaDir
+
+		// Create FUSE filesystem with permission rules and delta layer
 		fuseConfig := &fs.SandboxFSConfig{
 			SourceDir:  state.config.CodebasePath,
+			DeltaDir:   deltaDir,
 			MountPoint: fuseMountPoint,
 			Rules:      state.config.Permissions,
 		}
@@ -166,6 +176,7 @@ func (r *BwrapRuntime) Start(ctx context.Context, sandboxID string) error {
 		sandboxFS, err := fs.NewSandboxFS(fuseConfig)
 		if err != nil {
 			os.RemoveAll(fuseMountPoint)
+			os.RemoveAll(deltaDir)
 			return fmt.Errorf("failed to create FUSE filesystem: %w", err)
 		}
 
@@ -301,6 +312,11 @@ func (r *BwrapRuntime) Destroy(ctx context.Context, sandboxID string) error {
 		os.RemoveAll(state.fuseMountPoint)
 	}
 
+	// Clean up delta directory
+	if state.deltaDir != "" {
+		os.RemoveAll(state.deltaDir)
+	}
+
 	delete(r.states, sandboxID)
 	return nil
 }
@@ -349,6 +365,7 @@ func (r *BwrapRuntime) Exec(ctx context.Context, sandboxID string, req *types.Ex
 
 	config := state.config
 	fuseMountPoint := state.fuseMountPoint
+	fuseFS := state.fuseFS
 	r.mu.RUnlock()
 
 	// Set timeout if specified
@@ -389,6 +406,12 @@ func (r *BwrapRuntime) Exec(ctx context.Context, sandboxID string, req *types.Ex
 			result.Stderr = string(exitErr.Stderr)
 			result.Stdout = string(stdout)
 			// Non-zero exit is not an error from our perspective
+			// Sync delta even on non-zero exit (command completed, just with error code)
+			if fuseFS != nil && fuseFS.DeltaEnabled() {
+				if syncErr := fuseFS.Sync(); syncErr != nil {
+					fmt.Printf("warning: sync delta failed for sandbox %s: %v\n", sandboxID, syncErr)
+				}
+			}
 			return result, nil
 		}
 
@@ -397,6 +420,14 @@ func (r *BwrapRuntime) Exec(ctx context.Context, sandboxID string, req *types.Ex
 
 	result.Stdout = string(stdout)
 	result.ExitCode = 0
+
+	// Sync delta changes to shared storage after successful exec
+	if fuseFS != nil && fuseFS.DeltaEnabled() {
+		if syncErr := fuseFS.Sync(); syncErr != nil {
+			fmt.Printf("warning: sync delta failed for sandbox %s: %v\n", sandboxID, syncErr)
+		}
+	}
+
 	return result, nil
 }
 
@@ -418,6 +449,7 @@ func (r *BwrapRuntime) ExecStream(ctx context.Context, sandboxID string, req *ty
 
 	config := state.config
 	fuseMountPoint := state.fuseMountPoint
+	fuseFS := state.fuseFS
 	r.mu.RUnlock()
 
 	// Set timeout if specified
@@ -469,7 +501,16 @@ func (r *BwrapRuntime) ExecStream(ctx context.Context, sandboxID string, req *ty
 		}
 	}()
 
-	return cmd.Wait()
+	waitErr := cmd.Wait()
+
+	// Sync delta changes to shared storage after command completes
+	if fuseFS != nil && fuseFS.DeltaEnabled() {
+		if syncErr := fuseFS.Sync(); syncErr != nil {
+			fmt.Printf("warning: sync delta failed for sandbox %s: %v\n", sandboxID, syncErr)
+		}
+	}
+
+	return waitErr
 }
 
 // buildBwrapCommand builds a bwrap command for Linux.

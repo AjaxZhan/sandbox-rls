@@ -24,7 +24,8 @@ var (
 
 // SandboxFSConfig holds the configuration for creating a SandboxFS.
 type SandboxFSConfig struct {
-	SourceDir  string                 // The source directory to expose
+	SourceDir  string                 // The source directory to expose (shared storage, read-only source)
+	DeltaDir   string                 // Delta directory for COW writes (optional, enables delta layer)
 	MountPoint string                 // Where to mount the FUSE filesystem
 	Rules      []types.PermissionRule // Permission rules
 }
@@ -36,6 +37,10 @@ type SandboxFS struct {
 	server     *fuse.Server
 	mounted    atomic.Bool
 	mu         sync.RWMutex
+
+	// Delta layer for COW support
+	delta        *DeltaLayer
+	deltaEnabled bool
 }
 
 // NewSandboxFS creates a new SandboxFS instance.
@@ -57,10 +62,22 @@ func NewSandboxFS(config *SandboxFSConfig) (*SandboxFS, error) {
 		return nil, ErrInvalidSourceDir
 	}
 
-	return &SandboxFS{
+	sfs := &SandboxFS{
 		config:     config,
 		permEngine: NewPermissionEngine(config.Rules),
-	}, nil
+	}
+
+	// Initialize delta layer if configured
+	if config.DeltaDir != "" {
+		delta, err := NewDeltaLayer(config.DeltaDir, config.SourceDir)
+		if err != nil {
+			return nil, err
+		}
+		sfs.delta = delta
+		sfs.deltaEnabled = true
+	}
+
+	return sfs, nil
 }
 
 // Mount mounts the FUSE filesystem. It blocks until the context is cancelled.
@@ -156,11 +173,147 @@ func (sfs *SandboxFS) checkView(path string) error {
 	return sfs.permEngine.CheckView(path)
 }
 
+// DeltaEnabled returns true if the delta layer is enabled.
+func (sfs *SandboxFS) DeltaEnabled() bool {
+	return sfs.deltaEnabled
+}
+
+// Sync synchronizes delta changes to the source directory.
+// This should be called after exec() completes to persist changes.
+func (sfs *SandboxFS) Sync() error {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return nil
+	}
+	return sfs.delta.Sync()
+}
+
+// ClearDelta clears the delta directory without syncing.
+// Use this to discard changes (e.g., on exec failure).
+func (sfs *SandboxFS) ClearDelta() error {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return nil
+	}
+	return sfs.delta.Clear()
+}
+
+// resolvePath resolves a virtual path to an actual filesystem path.
+// If delta is enabled, it checks delta first, then falls back to source.
+func (sfs *SandboxFS) resolvePath(relPath string) string {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return filepath.Join(sfs.config.SourceDir, relPath)
+	}
+	actualPath, _ := sfs.delta.ResolvePath(relPath)
+	return actualPath
+}
+
+// getDeltaPath returns the path in delta directory for writing.
+func (sfs *SandboxFS) getDeltaPath(relPath string) string {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return filepath.Join(sfs.config.SourceDir, relPath)
+	}
+	return sfs.delta.GetDeltaPath(relPath)
+}
+
+// ensureDeltaDir ensures parent directories exist in delta for a path.
+func (sfs *SandboxFS) ensureDeltaDir(relPath string) error {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return nil
+	}
+	return sfs.delta.EnsureDeltaDir(relPath)
+}
+
+// copyToDelta performs COW copy from source to delta.
+func (sfs *SandboxFS) copyToDelta(relPath string) error {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return nil
+	}
+	return sfs.delta.CopyToDelta(relPath)
+}
+
+// markDeleted marks a file as deleted in delta.
+func (sfs *SandboxFS) markDeleted(relPath string) error {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return nil
+	}
+	return sfs.delta.MarkDeleted(relPath)
+}
+
+// removeWhiteout removes deletion marker when file is recreated.
+func (sfs *SandboxFS) removeWhiteout(relPath string) error {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return nil
+	}
+	return sfs.delta.RemoveWhiteout(relPath)
+}
+
+// isDeleted checks if a file has been deleted in delta.
+func (sfs *SandboxFS) isDeleted(relPath string) bool {
+	if !sfs.deltaEnabled || sfs.delta == nil {
+		return false
+	}
+	return sfs.delta.IsDeleted(relPath)
+}
+
+// deltaRename handles rename operations in delta mode.
+// It copies the file to delta if needed, performs the rename within delta,
+// and creates a whiteout for the old location if it existed in source.
+func (sfs *SandboxFS) deltaRename(oldRelPath, newRelPath string) syscall.Errno {
+	if sfs.delta == nil {
+		return syscall.EIO
+	}
+
+	// Resolve old path - get actual location
+	oldActualPath, oldInDelta := sfs.delta.ResolvePath(oldRelPath)
+	if oldActualPath == "" {
+		return syscall.ENOENT
+	}
+
+	// Ensure new path's parent directory exists in delta
+	if err := sfs.delta.EnsureDeltaDir(newRelPath); err != nil {
+		return syscall.EIO
+	}
+
+	// Remove any whiteout at the new location
+	sfs.delta.RemoveWhiteout(newRelPath)
+
+	// Get new delta path
+	newDeltaPath := sfs.delta.GetDeltaPath(newRelPath)
+
+	// Check if old file exists in source (need to create whiteout after move)
+	oldSourcePath := sfs.delta.GetSourcePath(oldRelPath)
+	oldExistsInSource := false
+	if _, err := os.Lstat(oldSourcePath); err == nil {
+		oldExistsInSource = true
+	}
+
+	if oldInDelta {
+		// File is already in delta, just rename within delta
+		oldDeltaPath := sfs.delta.GetDeltaPath(oldRelPath)
+		if err := os.Rename(oldDeltaPath, newDeltaPath); err != nil {
+			return toErrno(err)
+		}
+	} else {
+		// File is in source only, copy to delta at new location
+		if err := copyFile(oldActualPath, newDeltaPath); err != nil {
+			return toErrno(err)
+		}
+	}
+
+	// If old file existed in source, create whiteout
+	if oldExistsInSource {
+		if err := sfs.delta.MarkDeleted(oldRelPath); err != nil {
+			return syscall.EIO
+		}
+	}
+
+	return fs.OK
+}
+
 // sandboxRoot is the root node of the FUSE filesystem.
 type sandboxRoot struct {
 	fs.Inode
 	sfs       *SandboxFS
-	sourceDir string
+	sourceDir string // base source directory (may be overridden by delta)
 }
 
 var _ = (fs.NodeLookuper)((*sandboxRoot)(nil))
@@ -175,7 +328,25 @@ var _ = (fs.NodeSymlinker)((*sandboxRoot)(nil))
 var _ = (fs.NodeReadlinker)((*sandboxRoot)(nil))
 
 // sourcePath returns the full source path for a given relative path.
+// If delta is enabled, it resolves through the delta layer.
 func (r *sandboxRoot) sourcePath(relPath string) string {
+	if r.sfs.deltaEnabled && r.sfs.delta != nil {
+		actualPath, _ := r.sfs.delta.ResolvePath(relPath)
+		return actualPath
+	}
+	return filepath.Join(r.sourceDir, relPath)
+}
+
+// deltaPath returns the path in delta directory for writes.
+func (r *sandboxRoot) deltaPath(relPath string) string {
+	if r.sfs.deltaEnabled && r.sfs.delta != nil {
+		return r.sfs.delta.GetDeltaPath(relPath)
+	}
+	return filepath.Join(r.sourceDir, relPath)
+}
+
+// baseSourcePath returns the path in base source directory (ignoring delta).
+func (r *sandboxRoot) baseSourcePath(relPath string) string {
 	return filepath.Join(r.sourceDir, relPath)
 }
 
@@ -202,13 +373,20 @@ func (r *sandboxRoot) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.A
 // Lookup implements fs.NodeLookuper.
 func (r *sandboxRoot) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	virtualPath := r.virtualPath(name)
-	sourcePath := r.sourcePath(name)
 
 	// Check permission (at least view required)
 	perm := r.sfs.getPermission(virtualPath)
 	if perm == types.PermNone {
 		return nil, syscall.ENOENT // Hidden file appears as non-existent
 	}
+
+	// Check if file was deleted in delta
+	if r.sfs.isDeleted(name) {
+		return nil, syscall.ENOENT
+	}
+
+	// Resolve the actual path (delta-aware)
+	sourcePath := r.sourcePath(name)
 
 	// Stat the source file
 	var st syscall.Stat_t
@@ -224,12 +402,16 @@ func (r *sandboxRoot) Lookup(ctx context.Context, name string, out *fuse.EntryOu
 	var child fs.InodeEmbedder
 	var stableAttr fs.StableAttr
 
+	// For directories, we need to use the base source path for sourceDir
+	// because sandboxDir.sourceDir is used as a prefix for child paths
+	baseSourcePath := r.baseSourcePath(name)
+
 	if fileType == syscall.S_IFDIR {
 		// Directory
 		child = &sandboxDir{
 			sandboxRoot: sandboxRoot{
 				sfs:       r.sfs,
-				sourceDir: sourcePath,
+				sourceDir: baseSourcePath,
 			},
 			virtualPath: virtualPath,
 		}
@@ -257,7 +439,15 @@ func (r *sandboxRoot) Lookup(ctx context.Context, name string, out *fuse.EntryOu
 
 // Readdir implements fs.NodeReaddirer.
 func (r *sandboxRoot) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	entries, err := os.ReadDir(r.sourceDir)
+	var entries []os.DirEntry
+	var err error
+
+	// Use merged directory listing if delta is enabled
+	if r.sfs.deltaEnabled && r.sfs.delta != nil {
+		entries, err = r.sfs.delta.MergedReadDir("")
+	} else {
+		entries, err = os.ReadDir(r.sourceDir)
+	}
 	if err != nil {
 		return nil, syscall.EIO
 	}
@@ -304,13 +494,26 @@ func (r *sandboxRoot) Mkdir(ctx context.Context, name string, mode uint32, out *
 		return nil, syscall.EACCES
 	}
 
-	sourcePath := r.sourcePath(name)
-	if err := os.Mkdir(sourcePath, os.FileMode(mode)); err != nil {
+	// Remove whiteout if exists (file was previously deleted)
+	if r.sfs.deltaEnabled {
+		r.sfs.removeWhiteout(name)
+	}
+
+	// Write to delta if enabled, otherwise to source
+	targetPath := r.deltaPath(name)
+	if r.sfs.deltaEnabled {
+		// Ensure parent delta directory exists
+		if err := r.sfs.ensureDeltaDir(name); err != nil {
+			return nil, syscall.EIO
+		}
+	}
+
+	if err := os.Mkdir(targetPath, os.FileMode(mode)); err != nil {
 		return nil, toErrno(err)
 	}
 
 	var st syscall.Stat_t
-	if err := syscall.Stat(sourcePath, &st); err != nil {
+	if err := syscall.Stat(targetPath, &st); err != nil {
 		return nil, syscall.EIO
 	}
 	out.Attr.FromStat(&st)
@@ -318,7 +521,7 @@ func (r *sandboxRoot) Mkdir(ctx context.Context, name string, mode uint32, out *
 	child := &sandboxDir{
 		sandboxRoot: sandboxRoot{
 			sfs:       r.sfs,
-			sourceDir: sourcePath,
+			sourceDir: r.baseSourcePath(name),
 		},
 		virtualPath: virtualPath,
 	}
@@ -335,6 +538,26 @@ func (r *sandboxRoot) Unlink(ctx context.Context, name string) syscall.Errno {
 		return syscall.EACCES
 	}
 
+	if r.sfs.deltaEnabled {
+		// Check if file exists in delta
+		deltaPath := r.deltaPath(name)
+		if _, err := os.Lstat(deltaPath); err == nil {
+			// File exists in delta, remove it
+			if err := os.Remove(deltaPath); err != nil {
+				return toErrno(err)
+			}
+		}
+		// Also check if file exists in source - if so, create whiteout
+		baseSourcePath := r.baseSourcePath(name)
+		if _, err := os.Lstat(baseSourcePath); err == nil {
+			if err := r.sfs.markDeleted(name); err != nil {
+				return syscall.EIO
+			}
+		}
+		return fs.OK
+	}
+
+	// No delta - direct removal from source
 	sourcePath := r.sourcePath(name)
 	if err := os.Remove(sourcePath); err != nil {
 		return toErrno(err)
@@ -351,6 +574,26 @@ func (r *sandboxRoot) Rmdir(ctx context.Context, name string) syscall.Errno {
 		return syscall.EACCES
 	}
 
+	if r.sfs.deltaEnabled {
+		// Check if directory exists in delta
+		deltaPath := r.deltaPath(name)
+		if _, err := os.Lstat(deltaPath); err == nil {
+			// Directory exists in delta, remove it
+			if err := os.Remove(deltaPath); err != nil {
+				return toErrno(err)
+			}
+		}
+		// Also check if directory exists in source - if so, create whiteout
+		baseSourcePath := r.baseSourcePath(name)
+		if _, err := os.Lstat(baseSourcePath); err == nil {
+			if err := r.sfs.markDeleted(name); err != nil {
+				return syscall.EIO
+			}
+		}
+		return fs.OK
+	}
+
+	// No delta - direct removal from source
 	sourcePath := r.sourcePath(name)
 	if err := os.Remove(sourcePath); err != nil {
 		return toErrno(err)
@@ -361,12 +604,29 @@ func (r *sandboxRoot) Rmdir(ctx context.Context, name string) syscall.Errno {
 // Rename implements fs.NodeRenamer.
 func (r *sandboxRoot) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	virtualPath := r.virtualPath(name)
+	oldRelPath := strings.TrimPrefix(virtualPath, "/")
 
 	// Check write permission for both old and new paths
 	if err := r.sfs.checkWrite(virtualPath); err != nil {
 		return syscall.EACCES
 	}
 
+	newVirtualPath := "/" + newName
+	if np, ok := newParent.(*sandboxDir); ok {
+		newVirtualPath = np.virtualPath + "/" + newName
+	}
+	newRelPath := strings.TrimPrefix(newVirtualPath, "/")
+
+	if err := r.sfs.checkWrite(newVirtualPath); err != nil {
+		return syscall.EACCES
+	}
+
+	// Handle delta mode
+	if r.sfs.deltaEnabled && r.sfs.delta != nil {
+		return r.sfs.deltaRename(oldRelPath, newRelPath)
+	}
+
+	// No delta - direct rename in source
 	// Get new parent's source path
 	var newSourceDir string
 	switch p := newParent.(type) {
@@ -376,15 +636,6 @@ func (r *sandboxRoot) Rename(ctx context.Context, name string, newParent fs.Inod
 		newSourceDir = p.sourceDir
 	default:
 		return syscall.EINVAL
-	}
-
-	newVirtualPath := "/" + newName
-	if np, ok := newParent.(*sandboxDir); ok {
-		newVirtualPath = np.virtualPath + "/" + newName
-	}
-
-	if err := r.sfs.checkWrite(newVirtualPath); err != nil {
-		return syscall.EACCES
 	}
 
 	oldPath := r.sourcePath(name)
@@ -405,11 +656,23 @@ func (r *sandboxRoot) Create(ctx context.Context, name string, flags uint32, mod
 		return nil, nil, 0, syscall.EACCES
 	}
 
-	sourcePath := r.sourcePath(name)
+	// Remove whiteout if exists (file was previously deleted)
+	if r.sfs.deltaEnabled {
+		r.sfs.removeWhiteout(name)
+	}
+
+	// Write to delta if enabled, otherwise to source
+	targetPath := r.deltaPath(name)
+	if r.sfs.deltaEnabled {
+		// Ensure parent delta directory exists
+		if err := r.sfs.ensureDeltaDir(name); err != nil {
+			return nil, nil, 0, syscall.EIO
+		}
+	}
 
 	// Strip FUSE-specific flags and use syscall.Open
 	flags = flags &^ FMODE_EXEC
-	fd, err := syscall.Open(sourcePath, int(flags)|os.O_CREATE, mode)
+	fd, err := syscall.Open(targetPath, int(flags)|os.O_CREATE, mode)
 	if err != nil {
 		return nil, nil, 0, toErrno(err)
 	}
@@ -423,7 +686,7 @@ func (r *sandboxRoot) Create(ctx context.Context, name string, flags uint32, mod
 
 	child := &sandboxFile{
 		sfs:         r.sfs,
-		sourcePath:  sourcePath,
+		sourcePath:  targetPath,
 		virtualPath: virtualPath,
 	}
 
@@ -439,20 +702,33 @@ func (r *sandboxRoot) Symlink(ctx context.Context, target, name string, out *fus
 		return nil, syscall.EACCES
 	}
 
-	sourcePath := r.sourcePath(name)
-	if err := os.Symlink(target, sourcePath); err != nil {
+	// Remove whiteout if exists
+	if r.sfs.deltaEnabled {
+		r.sfs.removeWhiteout(name)
+	}
+
+	// Write to delta if enabled, otherwise to source
+	targetPath := r.deltaPath(name)
+	if r.sfs.deltaEnabled {
+		// Ensure parent delta directory exists
+		if err := r.sfs.ensureDeltaDir(name); err != nil {
+			return nil, syscall.EIO
+		}
+	}
+
+	if err := os.Symlink(target, targetPath); err != nil {
 		return nil, toErrno(err)
 	}
 
 	var st syscall.Stat_t
-	if err := syscall.Lstat(sourcePath, &st); err != nil {
+	if err := syscall.Lstat(targetPath, &st); err != nil {
 		return nil, syscall.EIO
 	}
 	out.Attr.FromStat(&st)
 
 	child := &sandboxSymlink{
 		sfs:         r.sfs,
-		sourcePath:  sourcePath,
+		sourcePath:  targetPath,
 		virtualPath: virtualPath,
 	}
 
@@ -492,8 +768,21 @@ func (d *sandboxDir) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.At
 		return syscall.EACCES
 	}
 
+	// Resolve actual path through delta layer
+	relPath := strings.TrimPrefix(d.virtualPath, "/")
+	var actualPath string
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		actualPath, _ = d.sfs.delta.ResolvePath(relPath)
+		if actualPath == "" {
+			// Directory was deleted
+			return syscall.ENOENT
+		}
+	} else {
+		actualPath = d.sourceDir
+	}
+
 	var st syscall.Stat_t
-	if err := syscall.Stat(d.sourceDir, &st); err != nil {
+	if err := syscall.Stat(actualPath, &st); err != nil {
 		return toErrno(err)
 	}
 	out.Attr.FromStat(&st)
@@ -503,12 +792,27 @@ func (d *sandboxDir) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.At
 // Lookup implements fs.NodeLookuper for directories.
 func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	virtualPath := d.virtualPathFor(name)
-	sourcePath := filepath.Join(d.sourceDir, name)
 
 	// Check permission
 	perm := d.sfs.getPermission(virtualPath)
 	if perm == types.PermNone {
 		return nil, syscall.ENOENT
+	}
+
+	// Get relative path from root for delta operations
+	relPath := strings.TrimPrefix(virtualPath, "/")
+
+	// Check if file was deleted in delta
+	if d.sfs.isDeleted(relPath) {
+		return nil, syscall.ENOENT
+	}
+
+	// Resolve actual path through delta layer
+	var sourcePath string
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		sourcePath, _ = d.sfs.delta.ResolvePath(relPath)
+	} else {
+		sourcePath = filepath.Join(d.sourceDir, name)
 	}
 
 	var st syscall.Stat_t
@@ -522,11 +826,14 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 	var child fs.InodeEmbedder
 	var stableAttr fs.StableAttr
 
+	// Base source path for directory (used as prefix for child paths)
+	baseSourcePath := filepath.Join(d.sourceDir, name)
+
 	if fileType == syscall.S_IFDIR {
 		child = &sandboxDir{
 			sandboxRoot: sandboxRoot{
 				sfs:       d.sfs,
-				sourceDir: sourcePath,
+				sourceDir: baseSourcePath,
 			},
 			virtualPath: virtualPath,
 		}
@@ -552,7 +859,18 @@ func (d *sandboxDir) Lookup(ctx context.Context, name string, out *fuse.EntryOut
 
 // Readdir implements fs.NodeReaddirer for directories.
 func (d *sandboxDir) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	entries, err := os.ReadDir(d.sourceDir)
+	var entries []os.DirEntry
+	var err error
+
+	// Get relative path from root for delta operations
+	relPath := strings.TrimPrefix(d.virtualPath, "/")
+
+	// Use merged directory listing if delta is enabled
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		entries, err = d.sfs.delta.MergedReadDir(relPath)
+	} else {
+		entries, err = os.ReadDir(d.sourceDir)
+	}
 	if err != nil {
 		return nil, syscall.EIO
 	}
@@ -592,18 +910,34 @@ func (d *sandboxDir) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) 
 // Mkdir implements fs.NodeMkdirer for directories.
 func (d *sandboxDir) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	virtualPath := d.virtualPathFor(name)
+	relPath := strings.TrimPrefix(virtualPath, "/")
 
 	if err := d.sfs.checkWrite(virtualPath); err != nil {
 		return nil, syscall.EACCES
 	}
 
-	sourcePath := filepath.Join(d.sourceDir, name)
-	if err := os.Mkdir(sourcePath, os.FileMode(mode)); err != nil {
+	// Remove whiteout if exists
+	if d.sfs.deltaEnabled {
+		d.sfs.removeWhiteout(relPath)
+	}
+
+	// Write to delta if enabled
+	var targetPath string
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		if err := d.sfs.ensureDeltaDir(relPath); err != nil {
+			return nil, syscall.EIO
+		}
+		targetPath = d.sfs.delta.GetDeltaPath(relPath)
+	} else {
+		targetPath = filepath.Join(d.sourceDir, name)
+	}
+
+	if err := os.Mkdir(targetPath, os.FileMode(mode)); err != nil {
 		return nil, toErrno(err)
 	}
 
 	var st syscall.Stat_t
-	if err := syscall.Stat(sourcePath, &st); err != nil {
+	if err := syscall.Stat(targetPath, &st); err != nil {
 		return nil, syscall.EIO
 	}
 	out.Attr.FromStat(&st)
@@ -611,7 +945,7 @@ func (d *sandboxDir) Mkdir(ctx context.Context, name string, mode uint32, out *f
 	child := &sandboxDir{
 		sandboxRoot: sandboxRoot{
 			sfs:       d.sfs,
-			sourceDir: sourcePath,
+			sourceDir: filepath.Join(d.sourceDir, name),
 		},
 		virtualPath: virtualPath,
 	}
@@ -622,9 +956,28 @@ func (d *sandboxDir) Mkdir(ctx context.Context, name string, mode uint32, out *f
 // Unlink implements fs.NodeUnlinker for directories.
 func (d *sandboxDir) Unlink(ctx context.Context, name string) syscall.Errno {
 	virtualPath := d.virtualPathFor(name)
+	relPath := strings.TrimPrefix(virtualPath, "/")
 
 	if err := d.sfs.checkWrite(virtualPath); err != nil {
 		return syscall.EACCES
+	}
+
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		// Check if file exists in delta
+		deltaPath := d.sfs.delta.GetDeltaPath(relPath)
+		if _, err := os.Lstat(deltaPath); err == nil {
+			if err := os.Remove(deltaPath); err != nil {
+				return toErrno(err)
+			}
+		}
+		// Check if file exists in source - if so, create whiteout
+		sourcePath := d.sfs.delta.GetSourcePath(relPath)
+		if _, err := os.Lstat(sourcePath); err == nil {
+			if err := d.sfs.markDeleted(relPath); err != nil {
+				return syscall.EIO
+			}
+		}
+		return fs.OK
 	}
 
 	sourcePath := filepath.Join(d.sourceDir, name)
@@ -637,9 +990,28 @@ func (d *sandboxDir) Unlink(ctx context.Context, name string) syscall.Errno {
 // Rmdir implements fs.NodeRmdirer for directories.
 func (d *sandboxDir) Rmdir(ctx context.Context, name string) syscall.Errno {
 	virtualPath := d.virtualPathFor(name)
+	relPath := strings.TrimPrefix(virtualPath, "/")
 
 	if err := d.sfs.checkWrite(virtualPath); err != nil {
 		return syscall.EACCES
+	}
+
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		// Check if directory exists in delta
+		deltaPath := d.sfs.delta.GetDeltaPath(relPath)
+		if _, err := os.Lstat(deltaPath); err == nil {
+			if err := os.Remove(deltaPath); err != nil {
+				return toErrno(err)
+			}
+		}
+		// Check if directory exists in source - if so, create whiteout
+		sourcePath := d.sfs.delta.GetSourcePath(relPath)
+		if _, err := os.Lstat(sourcePath); err == nil {
+			if err := d.sfs.markDeleted(relPath); err != nil {
+				return syscall.EIO
+			}
+		}
+		return fs.OK
 	}
 
 	sourcePath := filepath.Join(d.sourceDir, name)
@@ -652,6 +1024,7 @@ func (d *sandboxDir) Rmdir(ctx context.Context, name string) syscall.Errno {
 // Rename implements fs.NodeRenamer for directories.
 func (d *sandboxDir) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	virtualPath := d.virtualPathFor(name)
+	oldRelPath := strings.TrimPrefix(virtualPath, "/")
 
 	if err := d.sfs.checkWrite(virtualPath); err != nil {
 		return syscall.EACCES
@@ -670,11 +1043,18 @@ func (d *sandboxDir) Rename(ctx context.Context, name string, newParent fs.Inode
 	default:
 		return syscall.EINVAL
 	}
+	newRelPath := strings.TrimPrefix(newVirtualPath, "/")
 
 	if err := d.sfs.checkWrite(newVirtualPath); err != nil {
 		return syscall.EACCES
 	}
 
+	// Handle delta mode
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		return d.sfs.deltaRename(oldRelPath, newRelPath)
+	}
+
+	// No delta - direct rename in source
 	oldPath := filepath.Join(d.sourceDir, name)
 	newPath := filepath.Join(newSourceDir, newName)
 
@@ -687,16 +1067,31 @@ func (d *sandboxDir) Rename(ctx context.Context, name string, newParent fs.Inode
 // Create implements fs.NodeCreater for directories.
 func (d *sandboxDir) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (node *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	virtualPath := d.virtualPathFor(name)
+	relPath := strings.TrimPrefix(virtualPath, "/")
 
 	if err := d.sfs.checkWrite(virtualPath); err != nil {
 		return nil, nil, 0, syscall.EACCES
 	}
 
-	sourcePath := filepath.Join(d.sourceDir, name)
+	// Remove whiteout if exists
+	if d.sfs.deltaEnabled {
+		d.sfs.removeWhiteout(relPath)
+	}
+
+	// Write to delta if enabled
+	var targetPath string
+	if d.sfs.deltaEnabled && d.sfs.delta != nil {
+		if err := d.sfs.ensureDeltaDir(relPath); err != nil {
+			return nil, nil, 0, syscall.EIO
+		}
+		targetPath = d.sfs.delta.GetDeltaPath(relPath)
+	} else {
+		targetPath = filepath.Join(d.sourceDir, name)
+	}
 
 	// Strip FUSE-specific flags and use syscall.Open
 	flags = flags &^ FMODE_EXEC
-	fd, err := syscall.Open(sourcePath, int(flags)|os.O_CREATE, mode)
+	fd, err := syscall.Open(targetPath, int(flags)|os.O_CREATE, mode)
 	if err != nil {
 		return nil, nil, 0, toErrno(err)
 	}
@@ -710,7 +1105,7 @@ func (d *sandboxDir) Create(ctx context.Context, name string, flags uint32, mode
 
 	child := &sandboxFile{
 		sfs:         d.sfs,
-		sourcePath:  sourcePath,
+		sourcePath:  targetPath,
 		virtualPath: virtualPath,
 	}
 
@@ -747,32 +1142,46 @@ func (f *sandboxFile) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.A
 // Setattr implements fs.NodeSetattrer for files (handles truncate, chmod, etc.).
 func (f *sandboxFile) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	// Most setattr operations require write permission
-	if in.Valid&(fuse.FATTR_SIZE|fuse.FATTR_ATIME|fuse.FATTR_MTIME) != 0 {
+	if in.Valid&(fuse.FATTR_SIZE|fuse.FATTR_ATIME|fuse.FATTR_MTIME|fuse.FATTR_MODE) != 0 {
 		if err := f.sfs.checkWrite(f.virtualPath); err != nil {
 			return syscall.EACCES
 		}
+	}
+
+	// For write operations with delta enabled, perform COW if needed
+	relPath := strings.TrimPrefix(f.virtualPath, "/")
+	targetPath := f.sourcePath
+
+	if f.sfs.deltaEnabled && f.sfs.delta != nil {
+		// Check if file exists in delta
+		deltaPath := f.sfs.delta.GetDeltaPath(relPath)
+		if _, err := os.Lstat(deltaPath); os.IsNotExist(err) {
+			// File not in delta, need to copy from source (COW)
+			if err := f.sfs.copyToDelta(relPath); err != nil {
+				return syscall.EIO
+			}
+		}
+		targetPath = deltaPath
+		f.sourcePath = targetPath
 	}
 
 	// Handle truncate
 	if in.Valid&fuse.FATTR_SIZE != 0 {
-		if err := os.Truncate(f.sourcePath, int64(in.Size)); err != nil {
+		if err := os.Truncate(targetPath, int64(in.Size)); err != nil {
 			return toErrno(err)
 		}
 	}
 
-	// Handle chmod (optional, may be ignored)
+	// Handle chmod
 	if in.Valid&fuse.FATTR_MODE != 0 {
-		if err := f.sfs.checkWrite(f.virtualPath); err != nil {
-			return syscall.EACCES
-		}
-		if err := os.Chmod(f.sourcePath, os.FileMode(in.Mode)); err != nil {
+		if err := os.Chmod(targetPath, os.FileMode(in.Mode)); err != nil {
 			return toErrno(err)
 		}
 	}
 
 	// Update output attributes
 	var st syscall.Stat_t
-	if err := syscall.Stat(f.sourcePath, &st); err != nil {
+	if err := syscall.Stat(targetPath, &st); err != nil {
 		return toErrno(err)
 	}
 	out.Attr.FromStat(&st)
@@ -798,11 +1207,30 @@ func (f *sandboxFile) Open(ctx context.Context, flags uint32) (fh fs.FileHandle,
 		}
 	}
 
+	// Determine the actual file path
+	actualPath := f.sourcePath
+	relPath := strings.TrimPrefix(f.virtualPath, "/")
+
+	// For write access with delta enabled, perform COW if needed
+	if f.sfs.deltaEnabled && f.sfs.delta != nil && accMode != syscall.O_RDONLY {
+		// Check if file exists in delta
+		deltaPath := f.sfs.delta.GetDeltaPath(relPath)
+		if _, err := os.Lstat(deltaPath); os.IsNotExist(err) {
+			// File not in delta, need to copy from source (COW)
+			if err := f.sfs.copyToDelta(relPath); err != nil {
+				return nil, 0, syscall.EIO
+			}
+		}
+		actualPath = deltaPath
+		// Update sourcePath for subsequent operations
+		f.sourcePath = actualPath
+	}
+
 	// Strip FUSE-specific flags that shouldn't be passed to the OS
 	flags = flags &^ (syscall.O_APPEND | FMODE_EXEC)
 
 	// Use syscall.Open directly
-	fd, err := syscall.Open(f.sourcePath, int(flags), 0)
+	fd, err := syscall.Open(actualPath, int(flags), 0)
 	if err != nil {
 		return nil, 0, toErrno(err)
 	}

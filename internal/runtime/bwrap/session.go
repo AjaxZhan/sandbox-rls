@@ -310,11 +310,23 @@ func (r *BwrapRuntime) SessionExec(ctx context.Context, sessionID string, req *t
 		r.mu.RUnlock()
 		return nil, types.ErrSessionNotFound
 	}
+
+	// Get sandbox state for delta sync
+	sandboxState, sandboxOk := r.states[sessState.sandboxID]
 	r.mu.RUnlock()
 
 	if sessState.session.Status != types.SessionStatusActive {
 		return nil, types.ErrSessionClosed
 	}
+
+	// Defer delta sync to after command execution
+	defer func() {
+		if sandboxOk && sandboxState.fuseFS != nil && sandboxState.fuseFS.DeltaEnabled() {
+			if syncErr := sandboxState.fuseFS.Sync(); syncErr != nil {
+				fmt.Printf("warning: sync delta failed for session %s: %v\n", sessionID, syncErr)
+			}
+		}
+	}()
 
 	// Generate unique marker for this command
 	markerBytes := make([]byte, 8)
