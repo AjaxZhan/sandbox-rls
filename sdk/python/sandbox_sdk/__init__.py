@@ -1,6 +1,31 @@
 """Sandbox SDK - Python client for the Sandbox RLS service.
 
-Example:
+This SDK provides both low-level and high-level APIs for interacting
+with the Sandbox service.
+
+High-Level API (Recommended):
+    Use the Sandbox class for the simplest experience:
+    
+    >>> from sandbox_sdk import Sandbox
+    >>> 
+    >>> # One-liner to create and run commands in a sandbox
+    >>> with Sandbox.from_local("./my-project") as sandbox:
+    ...     result = sandbox.run("python main.py")
+    ...     print(result.stdout)
+    >>> 
+    >>> # With Docker and resource limits
+    >>> with Sandbox.from_local(
+    ...     "./my-project",
+    ...     preset="agent-safe",
+    ...     runtime=RuntimeType.DOCKER,
+    ...     image="python:3.11-slim",
+    ...     resources=ResourceLimits(memory_bytes=512*1024*1024),
+    ... ) as sandbox:
+    ...     result = sandbox.run("pytest")
+
+Low-Level API:
+    Use SandboxClient for fine-grained control:
+    
     >>> from sandbox_sdk import SandboxClient
     >>> 
     >>> client = SandboxClient(endpoint="localhost:9000")
@@ -33,6 +58,7 @@ Example:
 """
 
 from .client import SandboxClient, SessionWrapper
+from .sandbox import Sandbox
 from .types import (
     Codebase,
     ExecResult,
@@ -40,26 +66,99 @@ from .types import (
     Permission,
     PatternType,
     PermissionRule,
-    Sandbox,
+    ResourceLimits,
+    RuntimeType,
+    Sandbox as SandboxInfo,
     SandboxStatus,
     Session,
     SessionStatus,
     UploadResult,
 )
+from .presets import (
+    PRESETS,
+    get_preset,
+    get_preset_dicts,
+    extend_preset,
+    list_presets,
+    register_preset,
+)
+from .exceptions import (
+    SandboxError,
+    SandboxNotFoundError,
+    SandboxNotRunningError,
+    CodebaseError,
+    CodebaseNotFoundError,
+    FileNotFoundError,
+    CommandTimeoutError,
+    CommandExecutionError,
+    PermissionDeniedError,
+    SessionError,
+    SessionNotFoundError,
+    SessionClosedError,
+    ResourceLimitExceededError,
+    InvalidConfigurationError,
+    UploadError,
+    ConnectionError,
+)
+from .utils import (
+    walk_directory,
+    parse_ignore_file,
+    human_readable_size,
+    generate_codebase_name,
+    generate_owner_id,
+    count_files,
+)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
+    # High-level API
+    "Sandbox",
+    # Low-level client
     "SandboxClient",
     "SessionWrapper",
+    # Types
     "Codebase",
     "ExecResult",
     "FileInfo",
     "Permission",
     "PatternType",
     "PermissionRule",
-    "Sandbox",
+    "ResourceLimits",
+    "RuntimeType",
+    "SandboxInfo",
     "SandboxStatus",
     "Session",
     "SessionStatus",
     "UploadResult",
+    # Presets
+    "PRESETS",
+    "get_preset",
+    "get_preset_dicts",
+    "extend_preset",
+    "list_presets",
+    "register_preset",
+    # Exceptions
+    "SandboxError",
+    "SandboxNotFoundError",
+    "SandboxNotRunningError",
+    "CodebaseError",
+    "CodebaseNotFoundError",
+    "FileNotFoundError",
+    "CommandTimeoutError",
+    "CommandExecutionError",
+    "PermissionDeniedError",
+    "SessionError",
+    "SessionNotFoundError",
+    "SessionClosedError",
+    "ResourceLimitExceededError",
+    "InvalidConfigurationError",
+    "UploadError",
+    "ConnectionError",
+    # Utilities
+    "walk_directory",
+    "parse_ignore_file",
+    "human_readable_size",
+    "generate_codebase_name",
+    "generate_owner_id",
+    "count_files",
 ]

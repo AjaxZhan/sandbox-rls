@@ -2,13 +2,13 @@
 
 Fine-grained filesystem permissions for AI agent sandboxes.
 
-Sandbox RLS lets you run untrusted (or simply “not fully trusted”) AI agent code **against a real codebase** while enforcing **path-based, least-privilege access** at the file level.
+Sandbox RLS lets you run untrusted AI agent code **against a real codebase** while enforcing **path-based, least-privilege access** at the file level.
 
 ## Why it matters
 
 The best “agent interface” keeps winning: **a bash-capable agent + a filesystem**. It’s simple, universal, and already supported by every toolchain we use.
 
-FUSE (and projects like “agentfs”) show why: once you can *mount* a world, you can make an agent productive with plain old `ls`, `cat`, `grep`, and `find`. But there’s a missing layer of infrastructure: the filesystem is usually **all-or-nothing**. If you mount a real repo, you often mount *everything*.
+FUSE show why: once you can *mount* a world, you can make an agent productive with plain old `ls`, `cat`, `grep`, and `find`. But there’s a missing layer of infrastructure: the filesystem is usually **all-or-nothing**. If you mount a real repo, you often mount *everything*.
 
 Sandbox RLS fills that gap: a filesystem-backed sandbox that can make paths **writable**, **read-only**, **list-only**, or completely **invisible**—so you can give an agent a real codebase without giving it full trust.
 

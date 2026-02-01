@@ -1,7 +1,8 @@
 """Sandbox SDK Client for interacting with the Sandbox service."""
 
 from datetime import datetime, timedelta
-from typing import Dict, Iterator, List, Optional, Union
+from functools import wraps
+from typing import Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
 import grpc
 from google.protobuf.duration_pb2 import Duration
@@ -16,12 +17,44 @@ from .types import (
     Permission,
     PatternType,
     PermissionRule,
+    ResourceLimits,
+    RuntimeType,
     Sandbox,
     SandboxStatus,
     Session,
     SessionStatus,
     UploadResult,
 )
+from .exceptions import (
+    SandboxError,
+    SandboxNotFoundError,
+    CodebaseNotFoundError,
+    CommandTimeoutError,
+    ConnectionError,
+    PermissionDeniedError,
+    SessionNotFoundError,
+    from_grpc_error,
+)
+
+# Type variable for decorator
+T = TypeVar("T")
+
+
+def _handle_grpc_errors(context: str = "") -> Callable:
+    """Decorator to convert gRPC errors to SDK exceptions.
+    
+    Args:
+        context: Description of the operation for error messages.
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            try:
+                return func(*args, **kwargs)
+            except grpc.RpcError as e:
+                raise from_grpc_error(e, context)
+        return wrapper
+    return decorator
 
 
 def _permission_to_proto(perm: Permission) -> common_pb2.Permission:
@@ -77,6 +110,55 @@ def _proto_to_status(status: common_pb2.SandboxStatus) -> SandboxStatus:
     return mapping.get(status, SandboxStatus.PENDING)
 
 
+def _runtime_type_to_proto(rt: RuntimeType) -> sandbox_pb2.RuntimeType:
+    """Convert RuntimeType enum to protobuf."""
+    mapping = {
+        RuntimeType.BWRAP: sandbox_pb2.RUNTIME_TYPE_BWRAP,
+        RuntimeType.DOCKER: sandbox_pb2.RUNTIME_TYPE_DOCKER,
+    }
+    return mapping.get(rt, sandbox_pb2.RUNTIME_TYPE_UNSPECIFIED)
+
+
+def _proto_to_runtime_type(rt: sandbox_pb2.RuntimeType) -> RuntimeType:
+    """Convert protobuf RuntimeType to enum."""
+    mapping = {
+        sandbox_pb2.RUNTIME_TYPE_BWRAP: RuntimeType.BWRAP,
+        sandbox_pb2.RUNTIME_TYPE_DOCKER: RuntimeType.DOCKER,
+    }
+    return mapping.get(rt, RuntimeType.BWRAP)
+
+
+def _resource_limits_to_proto(
+    limits: Optional[ResourceLimits],
+) -> Optional[sandbox_pb2.ResourceLimits]:
+    """Convert ResourceLimits to protobuf."""
+    if limits is None:
+        return None
+    return sandbox_pb2.ResourceLimits(
+        memory_bytes=limits.memory_bytes or 0,
+        cpu_quota=limits.cpu_quota or 0,
+        cpu_shares=limits.cpu_shares or 0,
+        pids_limit=limits.pids_limit or 0,
+    )
+
+
+def _proto_to_resource_limits(
+    pb: Optional[sandbox_pb2.ResourceLimits],
+) -> Optional[ResourceLimits]:
+    """Convert protobuf ResourceLimits to dataclass."""
+    if pb is None:
+        return None
+    # Check if any limit is set
+    if not any([pb.memory_bytes, pb.cpu_quota, pb.cpu_shares, pb.pids_limit]):
+        return None
+    return ResourceLimits(
+        memory_bytes=pb.memory_bytes if pb.memory_bytes else None,
+        cpu_quota=pb.cpu_quota if pb.cpu_quota else None,
+        cpu_shares=pb.cpu_shares if pb.cpu_shares else None,
+        pids_limit=pb.pids_limit if pb.pids_limit else None,
+    )
+
+
 def _timestamp_to_datetime(ts) -> Optional[datetime]:
     """Convert protobuf Timestamp to datetime."""
     if ts is None or ts.seconds == 0:
@@ -108,6 +190,9 @@ def _proto_to_sandbox(pb: sandbox_pb2.Sandbox) -> Sandbox:
         status=_proto_to_status(pb.status),
         permissions=permissions,
         labels=dict(pb.labels),
+        runtime=_proto_to_runtime_type(pb.runtime),
+        image=pb.image if pb.image else None,
+        resources=_proto_to_resource_limits(pb.resources) if pb.HasField("resources") else None,
         created_at=_timestamp_to_datetime(pb.created_at),
         started_at=_timestamp_to_datetime(pb.started_at),
         stopped_at=_timestamp_to_datetime(pb.stopped_at),
@@ -282,12 +367,16 @@ class SandboxClient:
     # Sandbox Operations
     # ============================================
 
+    @_handle_grpc_errors("create sandbox")
     def create_sandbox(
         self,
         codebase_id: str,
         permissions: Optional[List[Union[PermissionRule, Dict]]] = None,
         labels: Optional[Dict[str, str]] = None,
         expires_in: Optional[timedelta] = None,
+        runtime: RuntimeType = RuntimeType.BWRAP,
+        image: Optional[str] = None,
+        resources: Optional[ResourceLimits] = None,
     ) -> Sandbox:
         """Create a new sandbox.
         
@@ -296,9 +385,25 @@ class SandboxClient:
             permissions: List of permission rules (PermissionRule or dict).
             labels: Optional labels for the sandbox.
             expires_in: Optional expiration duration.
+            runtime: Runtime type (bwrap or docker). Default is bwrap.
+            image: Docker image to use (required for docker runtime).
+            resources: Resource limits (memory, CPU, processes).
             
         Returns:
             The created Sandbox object.
+            
+        Raises:
+            SandboxError: If sandbox creation fails.
+            InvalidConfigurationError: If configuration is invalid.
+            
+        Example:
+            >>> sandbox = client.create_sandbox(
+            ...     codebase_id="cb_123",
+            ...     permissions=[{"pattern": "**/*", "permission": "read"}],
+            ...     runtime=RuntimeType.DOCKER,
+            ...     image="python:3.11-slim",
+            ...     resources=ResourceLimits(memory_bytes=512*1024*1024),
+            ... )
         """
         # Convert permissions to protobuf
         pb_permissions = []
@@ -318,7 +423,7 @@ class SandboxClient:
                         pattern=p["pattern"],
                         permission=_permission_to_proto(perm),
                         type=_pattern_type_to_proto(ptype),
-                        priority=p.get("priority", 0),
+                        priority=int(p.get("priority", 0)),
                     ))
 
         # Build request
@@ -326,6 +431,8 @@ class SandboxClient:
             codebase_id=codebase_id,
             permissions=pb_permissions,
             labels=labels or {},
+            runtime=_runtime_type_to_proto(runtime),
+            image=image or "",
         )
         
         if expires_in:
@@ -333,10 +440,16 @@ class SandboxClient:
                 seconds=int(expires_in.total_seconds()),
                 nanos=int((expires_in.total_seconds() % 1) * 1e9),
             ))
+        
+        if resources:
+            pb_resources = _resource_limits_to_proto(resources)
+            if pb_resources:
+                request.resources.CopyFrom(pb_resources)
 
         response = self._sandbox_stub.CreateSandbox(request)
         return _proto_to_sandbox(response)
 
+    @_handle_grpc_errors("get sandbox")
     def get_sandbox(self, sandbox_id: str) -> Sandbox:
         """Get information about a sandbox.
         
@@ -345,11 +458,15 @@ class SandboxClient:
             
         Returns:
             The Sandbox object.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
         """
         request = sandbox_pb2.GetSandboxRequest(sandbox_id=sandbox_id)
         response = self._sandbox_stub.GetSandbox(request)
         return _proto_to_sandbox(response)
 
+    @_handle_grpc_errors("list sandboxes")
     def list_sandboxes(self, codebase_id: Optional[str] = None) -> List[Sandbox]:
         """List all sandboxes.
         
@@ -363,6 +480,7 @@ class SandboxClient:
         response = self._sandbox_stub.ListSandboxes(request)
         return [_proto_to_sandbox(sb) for sb in response.sandboxes]
 
+    @_handle_grpc_errors("start sandbox")
     def start_sandbox(self, sandbox_id: str) -> Sandbox:
         """Start a pending sandbox.
         
@@ -371,11 +489,15 @@ class SandboxClient:
             
         Returns:
             The updated Sandbox object.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
         """
         request = sandbox_pb2.StartSandboxRequest(sandbox_id=sandbox_id)
         response = self._sandbox_stub.StartSandbox(request)
         return _proto_to_sandbox(response)
 
+    @_handle_grpc_errors("stop sandbox")
     def stop_sandbox(self, sandbox_id: str) -> Sandbox:
         """Stop a running sandbox.
         
@@ -384,20 +506,28 @@ class SandboxClient:
             
         Returns:
             The updated Sandbox object.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
         """
         request = sandbox_pb2.StopSandboxRequest(sandbox_id=sandbox_id)
         response = self._sandbox_stub.StopSandbox(request)
         return _proto_to_sandbox(response)
 
+    @_handle_grpc_errors("destroy sandbox")
     def destroy_sandbox(self, sandbox_id: str) -> None:
         """Destroy a sandbox and release resources.
         
         Args:
             sandbox_id: The ID of the sandbox to destroy.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
         """
         request = sandbox_pb2.DestroySandboxRequest(sandbox_id=sandbox_id)
         self._sandbox_stub.DestroySandbox(request)
 
+    @_handle_grpc_errors("execute command")
     def exec(
         self,
         sandbox_id: str,
@@ -419,6 +549,11 @@ class SandboxClient:
             
         Returns:
             The ExecResult with stdout, stderr, and exit code.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
+            SandboxNotRunningError: If the sandbox isn't running.
+            CommandTimeoutError: If the command times out.
         """
         request = sandbox_pb2.ExecRequest(
             sandbox_id=sandbox_id,
@@ -442,6 +577,7 @@ class SandboxClient:
             duration=_duration_to_timedelta(response.duration),
         )
 
+    @_handle_grpc_errors("execute command (stream)")
     def exec_stream(
         self,
         sandbox_id: str,
@@ -463,6 +599,10 @@ class SandboxClient:
             
         Yields:
             Chunks of output data.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
+            SandboxNotRunningError: If the sandbox isn't running.
         """
         request = sandbox_pb2.ExecRequest(
             sandbox_id=sandbox_id,
@@ -485,6 +625,7 @@ class SandboxClient:
     # Session Operations
     # ============================================
 
+    @_handle_grpc_errors("create session")
     def create_session(
         self,
         sandbox_id: str,
@@ -503,6 +644,10 @@ class SandboxClient:
             
         Returns:
             A SessionWrapper object for the new session.
+            
+        Raises:
+            SandboxNotFoundError: If the sandbox doesn't exist.
+            SandboxNotRunningError: If the sandbox isn't running.
             
         Example:
             >>> session = client.create_session(sandbox_id)
@@ -534,6 +679,7 @@ class SandboxClient:
         """
         return self.create_session(sandbox_id, shell, env)
 
+    @_handle_grpc_errors("get session")
     def get_session(self, session_id: str) -> Session:
         """Get information about a session.
         
@@ -542,11 +688,15 @@ class SandboxClient:
             
         Returns:
             The Session object.
+            
+        Raises:
+            SessionNotFoundError: If the session doesn't exist.
         """
         request = sandbox_pb2.GetSessionRequest(session_id=session_id)
         response = self._sandbox_stub.GetSession(request)
         return _proto_to_session(response)
 
+    @_handle_grpc_errors("list sessions")
     def list_sessions(self, sandbox_id: str) -> List[Session]:
         """List all sessions for a sandbox.
         
@@ -560,15 +710,20 @@ class SandboxClient:
         response = self._sandbox_stub.ListSessions(request)
         return [_proto_to_session(s) for s in response.sessions]
 
+    @_handle_grpc_errors("destroy session")
     def destroy_session(self, session_id: str) -> None:
         """Destroy a session and clean up all child processes.
         
         Args:
             session_id: The ID of the session to destroy.
+            
+        Raises:
+            SessionNotFoundError: If the session doesn't exist.
         """
         request = sandbox_pb2.DestroySessionRequest(session_id=session_id)
         self._sandbox_stub.DestroySession(request)
 
+    @_handle_grpc_errors("session exec")
     def session_exec(
         self,
         session_id: str,
@@ -587,6 +742,11 @@ class SandboxClient:
             
         Returns:
             The ExecResult with stdout, stderr, and exit code.
+            
+        Raises:
+            SessionNotFoundError: If the session doesn't exist.
+            SessionClosedError: If the session is closed.
+            CommandTimeoutError: If the command times out.
         """
         request = sandbox_pb2.SessionExecRequest(
             session_id=session_id,
@@ -611,6 +771,7 @@ class SandboxClient:
     # Codebase Operations
     # ============================================
 
+    @_handle_grpc_errors("create codebase")
     def create_codebase(self, name: str, owner_id: str) -> Codebase:
         """Create a new codebase.
         
@@ -625,6 +786,7 @@ class SandboxClient:
         response = self._codebase_stub.CreateCodebase(request)
         return _proto_to_codebase(response)
 
+    @_handle_grpc_errors("get codebase")
     def get_codebase(self, codebase_id: str) -> Codebase:
         """Get information about a codebase.
         
@@ -633,11 +795,15 @@ class SandboxClient:
             
         Returns:
             The Codebase object.
+            
+        Raises:
+            CodebaseNotFoundError: If the codebase doesn't exist.
         """
         request = codebase_pb2.GetCodebaseRequest(codebase_id=codebase_id)
         response = self._codebase_stub.GetCodebase(request)
         return _proto_to_codebase(response)
 
+    @_handle_grpc_errors("list codebases")
     def list_codebases(self, owner_id: Optional[str] = None) -> List[Codebase]:
         """List all codebases.
         
@@ -651,15 +817,20 @@ class SandboxClient:
         response = self._codebase_stub.ListCodebases(request)
         return [_proto_to_codebase(cb) for cb in response.codebases]
 
+    @_handle_grpc_errors("delete codebase")
     def delete_codebase(self, codebase_id: str) -> None:
         """Delete a codebase.
         
         Args:
             codebase_id: The ID of the codebase to delete.
+            
+        Raises:
+            CodebaseNotFoundError: If the codebase doesn't exist.
         """
         request = codebase_pb2.DeleteCodebaseRequest(codebase_id=codebase_id)
         self._codebase_stub.DeleteCodebase(request)
 
+    @_handle_grpc_errors("upload file")
     def upload_file(
         self,
         codebase_id: str,
@@ -677,6 +848,10 @@ class SandboxClient:
             
         Returns:
             The UploadResult with file info.
+            
+        Raises:
+            CodebaseNotFoundError: If the codebase doesn't exist.
+            UploadError: If the upload fails.
         """
         def generate_chunks():
             # First send metadata
@@ -699,6 +874,7 @@ class SandboxClient:
             checksum=response.checksum,
         )
 
+    @_handle_grpc_errors("download file")
     def download_file(self, codebase_id: str, file_path: str) -> bytes:
         """Download a file from a codebase.
         
@@ -708,6 +884,10 @@ class SandboxClient:
             
         Returns:
             The file content as bytes.
+            
+        Raises:
+            CodebaseNotFoundError: If the codebase doesn't exist.
+            FileNotFoundError: If the file doesn't exist.
         """
         request = codebase_pb2.DownloadFileRequest(
             codebase_id=codebase_id,
@@ -718,6 +898,7 @@ class SandboxClient:
             chunks.append(response.data)
         return b"".join(chunks)
 
+    @_handle_grpc_errors("list files")
     def list_files(
         self,
         codebase_id: str,
@@ -733,6 +914,9 @@ class SandboxClient:
             
         Returns:
             List of FileInfo objects.
+            
+        Raises:
+            CodebaseNotFoundError: If the codebase doesn't exist.
         """
         request = codebase_pb2.ListFilesRequest(
             codebase_id=codebase_id,

@@ -36,6 +36,61 @@ class SessionStatus(str, Enum):
     CLOSED = "closed"
 
 
+class RuntimeType(str, Enum):
+    """Runtime type for sandbox execution.
+    
+    Determines the isolation mechanism used for the sandbox.
+    """
+    BWRAP = "bwrap"    # Bubblewrap - lightweight namespace isolation
+    DOCKER = "docker"  # Docker container - stronger isolation
+
+
+@dataclass
+class ResourceLimits:
+    """Resource constraints for a sandbox.
+    
+    Defines limits on CPU, memory, and process count that the sandbox
+    can use. These limits are enforced by the runtime (Docker or bwrap).
+    
+    Attributes:
+        memory_bytes: Maximum memory in bytes (e.g., 512*1024*1024 for 512MB).
+        cpu_quota: CPU quota in microseconds per 100ms period.
+        cpu_shares: CPU shares (relative weight, default 1024).
+        pids_limit: Maximum number of processes/threads.
+        
+    Example:
+        >>> limits = ResourceLimits(
+        ...     memory_bytes=512 * 1024 * 1024,  # 512 MB
+        ...     pids_limit=100,
+        ... )
+    """
+    memory_bytes: Optional[int] = None
+    cpu_quota: Optional[int] = None
+    cpu_shares: Optional[int] = None
+    pids_limit: Optional[int] = None
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary, excluding None values."""
+        return {
+            k: v for k, v in {
+                "memory_bytes": self.memory_bytes,
+                "cpu_quota": self.cpu_quota,
+                "cpu_shares": self.cpu_shares,
+                "pids_limit": self.pids_limit,
+            }.items() if v is not None
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> "ResourceLimits":
+        """Create ResourceLimits from a dictionary."""
+        return cls(
+            memory_bytes=data.get("memory_bytes"),
+            cpu_quota=data.get("cpu_quota"),
+            cpu_shares=data.get("cpu_shares"),
+            pids_limit=data.get("pids_limit"),
+        )
+
+
 @dataclass
 class PermissionRule:
     """A rule defining file permissions."""
@@ -56,12 +111,30 @@ class PermissionRule:
 
 @dataclass
 class Sandbox:
-    """Represents a sandbox instance."""
+    """Represents a sandbox instance.
+    
+    Attributes:
+        id: Unique identifier for the sandbox.
+        codebase_id: ID of the associated codebase.
+        status: Current status (pending, running, stopped, error).
+        permissions: List of permission rules for file access.
+        labels: User-defined labels for organization.
+        runtime: Runtime type (bwrap or docker).
+        image: Docker image name (for docker runtime).
+        resources: Resource limits (memory, CPU, etc.).
+        created_at: When the sandbox was created.
+        started_at: When the sandbox was started.
+        stopped_at: When the sandbox was stopped.
+        expires_at: When the sandbox will expire.
+    """
     id: str
     codebase_id: str
     status: SandboxStatus
     permissions: List[PermissionRule] = field(default_factory=list)
     labels: Dict[str, str] = field(default_factory=dict)
+    runtime: RuntimeType = RuntimeType.BWRAP
+    image: Optional[str] = None
+    resources: Optional[ResourceLimits] = None
     created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     stopped_at: Optional[datetime] = None
