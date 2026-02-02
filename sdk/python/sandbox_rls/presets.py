@@ -9,10 +9,18 @@ from typing import Dict, List, Optional, Union
 from .types import Permission, PatternType, PermissionRule
 
 
+# Public constants for preset names (better autocomplete than raw strings)
+PRESET_AGENT_SAFE = "agent-safe"
+PRESET_READ_ONLY = "read-only"
+PRESET_FULL_ACCESS = "full-access"
+PRESET_DEVELOPMENT = "development"
+PRESET_VIEW_ONLY = "view-only"
+
+
 # Pre-defined permission templates
 PRESETS: Dict[str, List[Dict[str, str]]] = {
     # Safe preset for AI agents: read most files, write to output, hide secrets
-    "agent-safe": [
+    PRESET_AGENT_SAFE: [
         {"pattern": "**/*", "permission": "read", "priority": "0"},
         {"pattern": "/output/**", "permission": "write", "priority": "10"},
         {"pattern": "/tmp/**", "permission": "write", "priority": "10"},
@@ -24,15 +32,15 @@ PRESETS: Dict[str, List[Dict[str, str]]] = {
         {"pattern": "**/.git/**", "permission": "none", "priority": "50"},
     ],
     # Read-only access to all files
-    "read-only": [
+    PRESET_READ_ONLY: [
         {"pattern": "**/*", "permission": "read", "priority": "0"},
     ],
     # Full write access to all files
-    "full-access": [
+    PRESET_FULL_ACCESS: [
         {"pattern": "**/*", "permission": "write", "priority": "0"},
     ],
     # Development preset: full access except secrets
-    "development": [
+    PRESET_DEVELOPMENT: [
         {"pattern": "**/*", "permission": "write", "priority": "0"},
         {"pattern": "**/.env*", "permission": "none", "priority": "100"},
         {"pattern": "**/secrets/**", "permission": "none", "priority": "100"},
@@ -40,7 +48,7 @@ PRESETS: Dict[str, List[Dict[str, str]]] = {
         {"pattern": "**/*.pem", "permission": "none", "priority": "100"},
     ],
     # View-only: can see file names but not read content
-    "view-only": [
+    PRESET_VIEW_ONLY: [
         {"pattern": "**/*", "permission": "view", "priority": "0"},
     ],
 }

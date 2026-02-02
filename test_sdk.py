@@ -30,6 +30,7 @@ try:
         CommandTimeoutError,
         CommandExecutionError,
         PermissionDeniedError,
+        PRESET_VIEW_ONLY
     )
 except ImportError:
     print("❌ 无法导入 sandbox_rls")
@@ -108,7 +109,7 @@ def test_2_permissions():
         print("\n📦 创建带自定义权限的沙盒...")
         with Sandbox.from_local(
             str(test_dir),
-            preset="full-access",  # 使用 full-access 作为基础
+            preset=PRESET_VIEW_ONLY,
             permissions=[
                 # 默认: 只读
                 {"pattern": "**/*", "permission": "read"},
