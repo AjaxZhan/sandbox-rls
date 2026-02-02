@@ -1,0 +1,171 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          OUTPUT_NAME="sandbox-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+          go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
+            -o "dist/${OUTPUT_NAME}" \
+            ./cmd/sandbox-server
+
+      - name: Create archive
+        run: |
+          cd dist
+          OUTPUT_NAME="sandbox-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+          ARCHIVE_NAME="sandbox-server-${{ steps.version.outputs.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${OUTPUT_NAME}"
+          sha256sum "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.tar.gz*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate combined checksums
+        run: |
+          cd dist
+          cat *.sha256 > checksums.txt
+          rm -f *.sha256
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Sandbox RLS ${{ steps.version.outputs.VERSION }}
+            
+            ### Downloads
+            
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | Linux    | amd64        | [sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz) |
+            | Linux    | arm64        | [sandbox-server-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz) |
+            | macOS    | amd64 (Intel)| [sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz) |
+            | macOS    | arm64 (Apple Silicon) | [sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz) |
+            
+            ### Installation
+            
+            ```bash
+            # Download and extract (example for Linux amd64)
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+            tar -xzvf sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+            chmod +x sandbox-server-linux-amd64
+            sudo mv sandbox-server-linux-amd64 /usr/local/bin/sandbox-server
+            ```
+            
+            ### Python SDK
+            
+            ```bash
+            pip install sandbox-rls==${{ steps.version.outputs.VERSION }}
+            ```
+            
+            ### Verify checksums
+            
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  python-sdk:
+    name: Publish Python SDK
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update version in pyproject.toml
+        run: |
+          cd sdk/python
+          sed -i "s/version = \".*\"/version = \"${{ steps.version.outputs.VERSION }}\"/" pyproject.toml
+
+      - name: Build package
+        run: |
+          cd sdk/python
+          python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cd sdk/python
+          twine upload dist/* --skip-existing
