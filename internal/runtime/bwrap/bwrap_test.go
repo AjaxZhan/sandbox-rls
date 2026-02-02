@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/bwrap"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/bwrap"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 func TestBwrapRuntime_Name(t *testing.T) {
@@ -434,7 +434,7 @@ func TestBwrapRuntime_ErrorConditions(t *testing.T) {
 
 func TestIsBwrapAvailable(t *testing.T) {
 	available := bwrap.IsBwrapAvailable()
-	
+
 	if goruntime.GOOS != "linux" {
 		if available {
 			t.Error("IsBwrapAvailable should return false on non-Linux")

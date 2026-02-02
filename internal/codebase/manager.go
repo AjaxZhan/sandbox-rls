@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // FileInfo represents information about a file or directory.

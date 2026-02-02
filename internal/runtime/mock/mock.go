@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // MockRuntime is a mock implementation of runtime.RuntimeWithSession for testing.
@@ -16,7 +16,7 @@ type MockRuntime struct {
 	mu        sync.RWMutex
 	sandboxes map[string]*types.Sandbox
 	sessions  map[string]*types.Session
-	
+
 	// Hooks for customizing behavior in tests
 	OnCreate        func(ctx context.Context, config *runtime.SandboxConfig) (*types.Sandbox, error)
 	OnStart         func(ctx context.Context, sandboxID string) error

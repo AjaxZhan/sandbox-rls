@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // PermissionEngine handles permission checking for file operations.
@@ -66,27 +66,27 @@ func (pe *permissionEngine) UpdateRules(rules []types.PermissionRule) {
 // Higher values mean more specific (should match first).
 func patternSpecificity(pattern string) int {
 	specificity := 0
-	
+
 	// Patterns starting with "/" are more specific than "**" patterns
 	if strings.HasPrefix(pattern, "/") {
 		specificity += 100
 	}
-	
+
 	// Patterns NOT starting with "**" are more specific
 	if !strings.HasPrefix(pattern, "**") {
 		specificity += 50
 	}
-	
+
 	// Longer prefix (before **) means more specific
 	if idx := strings.Index(pattern, "**"); idx > 0 {
 		specificity += idx
 	}
-	
+
 	// Exact paths (no wildcards) are most specific
 	if !strings.Contains(pattern, "*") {
 		specificity += 200
 	}
-	
+
 	return specificity
 }
 
@@ -173,7 +173,7 @@ func matchDoubleGlob(pattern, path string) bool {
 		// Remove trailing slash from prefix for comparison
 		// e.g., "/secrets/" -> "/secrets"
 		prefixClean := strings.TrimSuffix(prefix, "/")
-		
+
 		// Check if path matches the prefix exactly (directory itself)
 		// or if path starts with the prefix (files/subdirs inside)
 		if prefixClean != "" {
@@ -186,12 +186,12 @@ func matchDoubleGlob(pattern, path string) bool {
 				return false
 			}
 		}
-		
+
 		// For suffix, we need to check if it matches the end of the path
 		if suffix == "" {
 			return true
 		}
-		
+
 		// If suffix starts with /, it should match exactly from some point
 		if strings.HasPrefix(suffix, "/") {
 			// suffix like "/*.py" - match any path ending with .py in any subdir
@@ -200,7 +200,7 @@ func matchDoubleGlob(pattern, path string) bool {
 			matched, _ := filepath.Match(suffixPattern, basename)
 			return matched
 		}
-		
+
 		hasSuffix := strings.HasSuffix(path, suffix)
 		return hasSuffix
 	}

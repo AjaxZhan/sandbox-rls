@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sandbox SDK 测试脚本
+AgentFense SDK 测试脚本
 
 这个脚本演示了 Python SDK 的主要功能:
 - 快速开始 (from_local)
@@ -12,7 +12,7 @@ Sandbox SDK 测试脚本
 
 使用前请确保:
 1. 安装 SDK: cd sdk/python && pip install -e .
-2. 启动服务器: ./bin/sandbox-server -config test-config.yaml
+2. 启动服务器: ./bin/agentfense-server -config test-config.yaml
 """
 
 import sys
@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 try:
-    from sandbox_rls import (
+    from agentfense import (
         Sandbox,
         SandboxClient,
         RuntimeType,
@@ -34,7 +34,7 @@ try:
         PRESET_READ_ONLY,
     )
 except ImportError:
-    print("❌ 无法导入 sandbox_rls")
+    print("❌ 无法导入 agentfense")
     print("请先安装 SDK: cd sdk/python && pip install -e .")
     sys.exit(1)
 
@@ -457,7 +457,7 @@ def main():
     except Exception as e:
         print(f"❌ 无法连接到服务器: {e}")
         print("\n请先启动服务器:")
-        print("  ./bin/sandbox-server -config test-config.yaml")
+        print("  ./bin/agentfense-server -config test-config.yaml")
         print("\n配置文件使用 Docker runtime，请确保:")
         print("  1. Docker 服务正在运行")
         print("  2. 当前用户有 Docker 权限")

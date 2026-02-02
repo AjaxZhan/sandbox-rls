@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package docker
@@ -9,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	rt "github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	rt "github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // These tests require a running Docker daemon and are tagged as integration tests.

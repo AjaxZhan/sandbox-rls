@@ -104,7 +104,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "📝 下一步:"
 echo "   1. 启动服务器:"
-echo "      ./bin/sandbox-server -config test-config.yaml"
+echo "      ./bin/agentfense-server -config test-config.yaml"
 echo ""
 echo "   2. 运行测试:"
 echo "      cd sdk/python && python test_sdk.py"

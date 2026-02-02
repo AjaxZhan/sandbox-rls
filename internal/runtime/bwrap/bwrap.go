@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/fs"
-	"github.com/ajaxzhan/sandbox-rls/internal/logging"
-	rt "github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/fs"
+	"github.com/AjaxZhan/AgentFense/internal/logging"
+	rt "github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 	"golang.org/x/sys/unix"
 )
 
@@ -45,8 +45,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		BwrapPath:        "bwrap",
 		DefaultTimeout:   30 * time.Second,
-		WorkDir:          "/tmp/sandbox-rls",
-		FUSEMountBase:    "/tmp/sandbox-rls/fuse",
+		WorkDir:          "/tmp/agentfense",
+		FUSEMountBase:    "/tmp/agentfense/fuse",
 		EnableNetworking: false,
 	}
 }

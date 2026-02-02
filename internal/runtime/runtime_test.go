@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/mock"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/mock"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // RuntimeTestSuite defines contract tests for any Runtime implementation.

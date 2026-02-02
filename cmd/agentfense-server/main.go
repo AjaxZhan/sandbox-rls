@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/codebase"
-	"github.com/ajaxzhan/sandbox-rls/internal/config"
-	"github.com/ajaxzhan/sandbox-rls/internal/logging"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/bwrap"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/docker"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/mock"
-	"github.com/ajaxzhan/sandbox-rls/internal/server"
+	"github.com/AjaxZhan/AgentFense/internal/codebase"
+	"github.com/AjaxZhan/AgentFense/internal/config"
+	"github.com/AjaxZhan/AgentFense/internal/logging"
+	"github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/bwrap"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/docker"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/mock"
+	"github.com/AjaxZhan/AgentFense/internal/server"
 )
 
 func main() {

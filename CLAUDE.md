@@ -15,15 +15,15 @@ AgentFense is a filesystem-backed sandbox system that enforces fine-grained, pat
 ./scripts/gen-proto.sh
 
 # Build the server
-go build -o bin/sandbox-server ./cmd/sandbox-server
+go build -o bin/agentfense-server ./cmd/agentfense-server
 
 # Run the server (gRPC :9000, REST :8080)
-./bin/sandbox-server -config configs/sandbox-server.yaml
+./bin/agentfense-server -config configs/agentfense-server.yaml
 
 # Run with specific runtime (overrides config)
-./bin/sandbox-server -runtime bwrap
-./bin/sandbox-server -runtime docker
-./bin/sandbox-server -runtime mock  # For testing without isolation
+./bin/agentfense-server -runtime bwrap
+./bin/agentfense-server -runtime docker
+./bin/agentfense-server -runtime mock  # For testing without isolation
 ```
 
 ### Testing
@@ -156,7 +156,7 @@ Use `MountWithReady()` to get notification when mount succeeds.
 
 ## Configuration
 
-Server config: `configs/sandbox-server.yaml`
+Server config: `configs/agentfense-server.yaml`
 
 Key settings:
 - `runtime.type`: `bwrap`, `docker`, or `mock`
@@ -166,13 +166,13 @@ Key settings:
 
 Override via flags:
 ```bash
-./bin/sandbox-server -runtime docker -grpc-addr :9001
+./bin/agentfense-server -runtime docker -grpc-addr :9001
 ```
 
 ## Important Notes
 
 ### Storage Paths
-All storage paths MUST be absolute when using Docker runtime (required for bind mounts). The server automatically normalizes paths on startup via `normalizeStoragePaths()` in `cmd/sandbox-server/main.go`.
+All storage paths MUST be absolute when using Docker runtime (required for bind mounts). The server automatically normalizes paths on startup via `normalizeStoragePaths()` in `cmd/agentfense-server/main.go`.
 
 ### Permission Priority
 The permission system uses a sophisticated priority algorithm:

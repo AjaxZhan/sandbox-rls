@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	rt "github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	rt "github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 	"github.com/docker/docker/api/types/container"
 )
 
@@ -21,8 +21,8 @@ type sessionState struct {
 	session     *types.Session
 	sandboxID   string
 	containerID string
-	execID      string               // Docker exec instance ID
-	conn        io.ReadWriteCloser   // Hijacked connection for PTY
+	execID      string             // Docker exec instance ID
+	conn        io.ReadWriteCloser // Hijacked connection for PTY
 	cancel      context.CancelFunc
 	mu          sync.Mutex
 	outputBuf   strings.Builder

@@ -7,7 +7,7 @@ Note: Full integration tests require a running sandbox server.
 import pytest
 from datetime import datetime, timedelta
 
-from sandbox_rls.types import Session, SessionStatus
+from agentfense.types import Session, SessionStatus
 
 
 class TestSessionType:
@@ -68,7 +68,7 @@ class TestSessionWrapper:
     
     def test_session_wrapper_properties(self):
         """Test SessionWrapper property access."""
-        from sandbox_rls.client import SessionWrapper
+        from agentfense.client import SessionWrapper
         
         # Create a mock client (we can't test actual calls without server)
         class MockClient:
@@ -90,7 +90,7 @@ class TestSessionWrapper:
 
     def test_session_wrapper_context_manager(self):
         """Test SessionWrapper as context manager."""
-        from sandbox_rls.client import SessionWrapper
+        from agentfense.client import SessionWrapper
         
         class MockClient:
             def __init__(self):
@@ -115,7 +115,7 @@ class TestSessionWrapper:
 
     def test_session_wrapper_context_manager_with_exception(self):
         """Test SessionWrapper cleans up even when exception occurs."""
-        from sandbox_rls.client import SessionWrapper
+        from agentfense.client import SessionWrapper
         
         class MockClient:
             def __init__(self):
@@ -147,7 +147,7 @@ class TestClientSessionMethods:
     
     def test_client_has_session_methods(self):
         """Test that SandboxClient has session methods."""
-        from sandbox_rls.client import SandboxClient
+        from agentfense.client import SandboxClient
         
         # Check methods exist
         assert hasattr(SandboxClient, 'create_session')

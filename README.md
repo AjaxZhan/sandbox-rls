@@ -1,13 +1,11 @@
 # AgentFense
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/sandbox-rls?logo=pypi&logoColor=white)](https://pypi.org/project/sandbox-rls/)
+[![PyPI](https://img.shields.io/pypi/v/agentfense?logo=pypi&logoColor=white)](https://pypi.org/project/agentfense/)
 [![Release](https://img.shields.io/github/v/release/AjaxZhan/AgentFense?logo=github)](https://github.com/AjaxZhan/AgentFense/releases)
 [![FUSE](https://img.shields.io/badge/FUSE-filesystem-orange)](https://github.com/libfuse/libfuse)
 
 > Least-privilege filesystem sandbox & context guardrails for AI agents
-
-**Compatibility note**: for now, technical identifiers remain unchanged (e.g. PyPI package `sandbox-rls`, Python import `sandbox_rls`, Go module path, default `/tmp/sandbox-rls` paths).
 
 Run untrusted AI agent code **against a real codebase** while enforcing **least-privilege access** at the file level.
 
@@ -31,7 +29,7 @@ AgentFense fills that gap with four permission levels:
 ## Quick Start
 
 ```python
-from sandbox_rls import Sandbox
+from agentfense import Sandbox
 
 # One-liner: create sandbox from local directory with "agent-safe" preset
 with Sandbox.from_local("./my-project") as sandbox:
@@ -61,7 +59,7 @@ Build secure AI agents that execute bash commands with permission control:
 
 ```python
 from anthropic import Anthropic
-from sandbox_rls import Sandbox
+from agentfense import Sandbox
 
 # Define what the agent can access
 PERMISSIONS = [
@@ -109,10 +107,10 @@ git clone https://github.com/AjaxZhan/AgentFense.git
 cd AgentFense
 
 go mod tidy
-go build -o bin/sandbox-server ./cmd/sandbox-server
+go build -o bin/agentfense-server ./cmd/agentfense-server
 
 # Start (gRPC :9000, REST :8080)
-./bin/sandbox-server -config configs/sandbox-server.yaml
+./bin/agentfense-server -config configs/agentfense-server.yaml
 ```
 
 **Prerequisites**: Go 1.21+, bubblewrap (`bwrap`)
@@ -128,7 +126,7 @@ pip install -e sdk/python/
 ### High-Level API (Recommended)
 
 ```python
-from sandbox_rls import Sandbox, RuntimeType, ResourceLimits
+from agentfense import Sandbox, RuntimeType, ResourceLimits
 
 # Basic usage
 with Sandbox.from_local("./my-project") as sandbox:
@@ -155,7 +153,7 @@ For high-concurrency scenarios, use the async API:
 
 ```python
 import asyncio
-from sandbox_rls import AsyncSandbox
+from agentfense import AsyncSandbox
 
 async def main():
     async with await AsyncSandbox.from_local("./my-project") as sandbox:
@@ -182,7 +180,7 @@ The async SDK provides the same API as the sync version, with `await` for all op
 | `development` | Full access except secrets |
 
 ```python
-from sandbox_rls import list_presets, extend_preset
+from agentfense import list_presets, extend_preset
 
 # Extend a preset
 rules = extend_preset("agent-safe", additions=[
@@ -193,7 +191,7 @@ rules = extend_preset("agent-safe", additions=[
 ### Error Handling
 
 ```python
-from sandbox_rls import Sandbox, CommandTimeoutError, CommandExecutionError
+from agentfense import Sandbox, CommandTimeoutError, CommandExecutionError
 
 try:
     with Sandbox.from_local("./project") as sandbox:
@@ -209,7 +207,7 @@ except CommandExecutionError as e:
 For full control, use `SandboxClient` directly:
 
 ```python
-from sandbox_rls import SandboxClient
+from agentfense import SandboxClient
 
 client = SandboxClient(endpoint="localhost:9000")
 

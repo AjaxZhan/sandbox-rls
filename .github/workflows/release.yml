@@ -42,23 +42,23 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          OUTPUT_NAME="sandbox-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+          OUTPUT_NAME="agentfense-server-${{ matrix.goos }}-${{ matrix.goarch }}"
           go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
             -o "dist/${OUTPUT_NAME}" \
-            ./cmd/sandbox-server
+            ./cmd/agentfense-server
 
       - name: Create archive
         run: |
           cd dist
-          OUTPUT_NAME="sandbox-server-${{ matrix.goos }}-${{ matrix.goarch }}"
-          ARCHIVE_NAME="sandbox-server-${{ steps.version.outputs.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          OUTPUT_NAME="agentfense-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+          ARCHIVE_NAME="agentfense-server-${{ steps.version.outputs.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           tar -czvf "${ARCHIVE_NAME}.tar.gz" "${OUTPUT_NAME}"
           sha256sum "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sandbox-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: agentfense-server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*.tar.gz*
 
   release:
@@ -96,25 +96,25 @@ jobs:
             
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | Linux    | amd64        | [sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz) |
-            | Linux    | arm64        | [sandbox-server-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz) |
-            | macOS    | amd64 (Intel)| [sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz) |
-            | macOS    | arm64 (Apple Silicon) | [sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz) |
+            | Linux    | amd64        | [agentfense-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/agentfense-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz) |
+            | Linux    | arm64        | [agentfense-server-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/agentfense-server-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz) |
+            | macOS    | amd64 (Intel)| [agentfense-server-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/agentfense-server-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz) |
+            | macOS    | arm64 (Apple Silicon) | [agentfense-server-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/agentfense-server-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz) |
             
             ### Installation
             
             ```bash
             # Download and extract (example for Linux amd64)
-            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
-            tar -xzvf sandbox-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
-            chmod +x sandbox-server-linux-amd64
-            sudo mv sandbox-server-linux-amd64 /usr/local/bin/sandbox-server
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/agentfense-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+            tar -xzvf agentfense-server-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+            chmod +x agentfense-server-linux-amd64
+            sudo mv agentfense-server-linux-amd64 /usr/local/bin/agentfense-server
             ```
             
             ### Python SDK
             
             ```bash
-            pip install sandbox-rls==${{ steps.version.outputs.VERSION }}
+            pip install agentfense==${{ steps.version.outputs.VERSION }}
             ```
             
             ### Verify checksums

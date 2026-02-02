@@ -15,23 +15,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/logging"
-	rt "github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/logging"
+	rt "github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 	"github.com/creack/pty"
 )
 
 // sessionState holds internal state for a session.
 type sessionState struct {
-	session       *types.Session
-	sandboxID     string
-	cmd           *exec.Cmd
-	pty           *os.File      // PTY master
-	cancel        context.CancelFunc
-	mu            sync.Mutex
-	outputBuf     strings.Builder
-	readyChan     chan struct{} // Signals when shell is ready
-	hasOwnPgid    bool          // Whether the process has its own process group (Linux only)
+	session    *types.Session
+	sandboxID  string
+	cmd        *exec.Cmd
+	pty        *os.File // PTY master
+	cancel     context.CancelFunc
+	mu         sync.Mutex
+	outputBuf  strings.Builder
+	readyChan  chan struct{} // Signals when shell is ready
+	hasOwnPgid bool          // Whether the process has its own process group (Linux only)
 }
 
 // generateSessionID generates a unique session ID.
@@ -397,13 +397,13 @@ func (r *BwrapRuntime) SessionExec(ctx context.Context, sessionID string, req *t
 			// The full end marker is: ___END_<marker>_<exitcode>___
 			// Important: Look for the marker at the START of a line to avoid matching
 			// the echoed command line. The marker should appear as a standalone line.
-			
+
 			// Find the end marker that appears at the beginning of a line
 			endMarkerWithNewline := "\n" + endMarker
 			endIdx := strings.LastIndex(currentOutput, endMarkerWithNewline)
 			if endIdx != -1 {
 				endIdx++ // Skip the leading newline
-				
+
 				// Find the exit code after end marker (format: ___END_xxx_N___)
 				afterEnd := currentOutput[endIdx+len(endMarker):]
 				endEndIdx := strings.Index(afterEnd, "___")
@@ -422,15 +422,15 @@ func (r *BwrapRuntime) SessionExec(ctx context.Context, sessionID string, req *t
 					if startIdx != -1 {
 						// Content starts right after the start marker line
 						contentStart := startIdx + len(startMarkerFull)
-						
+
 						// Content ends at the end marker
 						contentEnd := endIdx
-						
+
 						// Trim trailing newline before end marker
 						for contentEnd > contentStart && currentOutput[contentEnd-1] == '\n' {
 							contentEnd--
 						}
-						
+
 						if contentEnd > contentStart {
 							output = currentOutput[contentStart:contentEnd]
 						}
@@ -494,13 +494,13 @@ func cleanTerminalOutput(s string) string {
 			s = s[1:]
 		}
 	}
-	
+
 	// Remove carriage returns
 	s = strings.ReplaceAll(s, "\r", "")
-	
+
 	// Trim whitespace
 	s = strings.TrimSpace(s)
-	
+
 	return s
 }
 

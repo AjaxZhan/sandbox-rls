@@ -3,7 +3,7 @@ package fs
 import (
 	"testing"
 
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 func TestPermissionEngine_FilePattern(t *testing.T) {
@@ -106,9 +106,9 @@ func TestPermissionEngine_Priority(t *testing.T) {
 		path     string
 		expected types.Permission
 	}{
-		{"/docs/readme.md", types.PermWrite},      // Directory rule
-		{"/docs/secret.txt", types.PermNone},      // File rule overrides
-		{"/other/file.txt", types.PermRead},       // Glob fallback
+		{"/docs/readme.md", types.PermWrite}, // Directory rule
+		{"/docs/secret.txt", types.PermNone}, // File rule overrides
+		{"/other/file.txt", types.PermRead},  // Glob fallback
 	}
 
 	for _, tt := range tests {
@@ -176,9 +176,9 @@ func TestPermissionEngine_PathNormalization(t *testing.T) {
 	// All these should match
 	paths := []string{
 		"/docs/readme.md",
-		"docs/readme.md",           // Without leading slash
-		"/docs//readme.md",         // Double slash (will be cleaned)
-		"/docs/./readme.md",        // With dot
+		"docs/readme.md",    // Without leading slash
+		"/docs//readme.md",  // Double slash (will be cleaned)
+		"/docs/./readme.md", // With dot
 	}
 
 	for _, path := range paths {

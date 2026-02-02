@@ -1,7 +1,7 @@
-"""Tests for sandbox_rls types."""
+"""Tests for agentfense types."""
 
 import pytest
-from sandbox_rls.types import (
+from agentfense.types import (
     Permission,
     PatternType,
     PermissionRule,
@@ -161,7 +161,7 @@ class TestExecResult:
         assert returned is result
 
     def test_raise_on_error_failure(self):
-        from sandbox_rls.exceptions import CommandExecutionError
+        from agentfense.exceptions import CommandExecutionError
         
         result = ExecResult(
             stdout="",
@@ -177,7 +177,7 @@ class TestExecResult:
         assert "command not found" in exc_info.value.stderr
 
     def test_raise_on_error_without_command(self):
-        from sandbox_rls.exceptions import CommandExecutionError
+        from agentfense.exceptions import CommandExecutionError
         
         result = ExecResult(stdout="", stderr="error", exit_code=1)
         with pytest.raises(CommandExecutionError) as exc_info:

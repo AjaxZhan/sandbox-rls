@@ -14,7 +14,7 @@ echo "ANTHROPIC_API_KEY=your-key" > .env
 echo "ANTHROPIC_BASE_URL=https://your-api-endpoint" >> .env  # optional
 
 # Start sandbox server (in another terminal)
-cd ../.. && ./bin/sandbox-server
+cd ../.. && ./bin/agentfense-server
 
 # Run agent
 python agent.py

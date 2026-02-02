@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // TestStore tests Store interface implementations.

@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/fs"
-	"github.com/ajaxzhan/sandbox-rls/internal/logging"
-	rt "github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/fs"
+	"github.com/AjaxZhan/AgentFense/internal/logging"
+	rt "github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 	"github.com/docker/docker/api/types/container"
 	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
@@ -54,7 +54,7 @@ func DefaultConfig() *Config {
 		DockerHost:       "", // Uses default Docker socket
 		DefaultImage:     "ubuntu:22.04",
 		DefaultTimeout:   30 * time.Second,
-		FUSEMountBase:    "/tmp/sandbox-rls/fuse",
+		FUSEMountBase:    "/tmp/agentfense/fuse",
 		NetworkMode:      "none",
 		EnableNetworking: false,
 	}
@@ -387,14 +387,14 @@ func (r *DockerRuntime) createContainer(ctx context.Context, state *sandboxState
 		Cmd:   []string{"sleep", "infinity"}, // Keep container running
 		Tty:   true,
 		Labels: map[string]string{
-			"sandbox-rls.sandbox-id":  sandbox.ID,
-			"sandbox-rls.codebase-id": sandbox.CodebaseID,
+			"agentfense.sandbox-id":  sandbox.ID,
+			"agentfense.codebase-id": sandbox.CodebaseID,
 		},
 	}
 
 	// Add custom labels
 	for k, v := range config.Labels {
-		containerConfig.Labels["sandbox-rls.label."+k] = v
+		containerConfig.Labels["agentfense.label."+k] = v
 	}
 
 	// Host configuration

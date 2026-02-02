@@ -8,21 +8,21 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/ajaxzhan/sandbox-rls/api/gen"
-	"github.com/ajaxzhan/sandbox-rls/internal/codebase"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/mock"
-	"github.com/ajaxzhan/sandbox-rls/internal/server"
+	pb "github.com/AjaxZhan/AgentFense/api/gen"
+	"github.com/AjaxZhan/AgentFense/internal/codebase"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/mock"
+	"github.com/AjaxZhan/AgentFense/internal/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 // testEnv holds the test environment.
 type testEnv struct {
-	server     *server.Server
-	grpcConn   *grpc.ClientConn
-	sandboxCli pb.SandboxServiceClient
+	server      *server.Server
+	grpcConn    *grpc.ClientConn
+	sandboxCli  pb.SandboxServiceClient
 	codebaseCli pb.CodebaseServiceClient
-	cleanup    func()
+	cleanup     func()
 }
 
 // setupTestEnv creates a test environment with a running server.
@@ -75,9 +75,9 @@ func setupTestEnv(t *testing.T) *testEnv {
 	}
 
 	return &testEnv{
-		server:     srv,
-		grpcConn:   conn,
-		sandboxCli: pb.NewSandboxServiceClient(conn),
+		server:      srv,
+		grpcConn:    conn,
+		sandboxCli:  pb.NewSandboxServiceClient(conn),
 		codebaseCli: pb.NewCodebaseServiceClient(conn),
 		cleanup: func() {
 			conn.Close()
@@ -335,10 +335,10 @@ func TestFileOperations(t *testing.T) {
 
 	// Upload multiple files
 	files := map[string][]byte{
-		"readme.md":     []byte("# Test Project\n\nThis is a test."),
-		"src/main.py":   []byte("print('Hello, World!')"),
-		"src/utils.py":  []byte("def helper(): pass"),
-		"config.yaml":   []byte("debug: true\nport: 8080"),
+		"readme.md":    []byte("# Test Project\n\nThis is a test."),
+		"src/main.py":  []byte("print('Hello, World!')"),
+		"src/utils.py": []byte("def helper(): pass"),
+		"config.yaml":  []byte("debug: true\nport: 8080"),
 	}
 
 	for path, content := range files {

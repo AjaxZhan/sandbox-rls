@@ -377,7 +377,7 @@ const file_common_proto_rawDesc = "" +
 	"\rSessionStatus\x12\x1e\n" +
 	"\x1aSESSION_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SESSION_STATUS_ACTIVE\x10\x01\x12\x19\n" +
-	"\x15SESSION_STATUS_CLOSED\x10\x02B>Z<github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1b\x06proto3"
+	"\x15SESSION_STATUS_CLOSED\x10\x02B=Z;github.com/AjaxZhan/AgentFense/api/gen/sandbox/v1;sandboxv1b\x06proto3"
 
 var (
 	file_common_proto_rawDescOnce sync.Once

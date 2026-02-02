@@ -1,4 +1,4 @@
-module github.com/ajaxzhan/sandbox-rls
+module github.com/AjaxZhan/AgentFense
 
 go 1.25.5
 

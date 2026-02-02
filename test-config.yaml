@@ -1,4 +1,4 @@
-# Sandbox Server Test Configuration
+# AgentFense Server Test Configuration
 # 用于本地测试的配置文件 - 使用 Docker Runtime
 #
 # 使用方法:
@@ -6,7 +6,7 @@
 #      ./scripts/init-docker.sh
 #   
 #   2. 启动服务器:
-#      ./bin/sandbox-server -config test-config.yaml
+#      ./bin/agentfense-server -config test-config.yaml
 #
 # 注意:
 #   - storage 路径可以使用相对路径，服务器会自动转换为绝对路径

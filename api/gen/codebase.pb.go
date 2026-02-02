@@ -944,7 +944,7 @@ const file_codebase_proto_rawDesc = "" +
 	"\x0eDeleteCodebase\x12!.sandbox.v1.DeleteCodebaseRequest\x1a\x11.sandbox.v1.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/v1/codebases/{codebase_id}\x12B\n" +
 	"\vUploadFiles\x12\x17.sandbox.v1.UploadChunk\x1a\x18.sandbox.v1.UploadResult(\x01\x12H\n" +
 	"\fDownloadFile\x12\x1f.sandbox.v1.DownloadFileRequest\x1a\x15.sandbox.v1.FileChunk0\x01\x12s\n" +
-	"\tListFiles\x12\x1c.sandbox.v1.ListFilesRequest\x1a\x1d.sandbox.v1.ListFilesResponse\")\x82\xd3\xe4\x93\x02#\x12!/v1/codebases/{codebase_id}/filesB>Z<github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1b\x06proto3"
+	"\tListFiles\x12\x1c.sandbox.v1.ListFilesRequest\x1a\x1d.sandbox.v1.ListFilesResponse\")\x82\xd3\xe4\x93\x02#\x12!/v1/codebases/{codebase_id}/filesB=Z;github.com/AjaxZhan/AgentFense/api/gen/sandbox/v1;sandboxv1b\x06proto3"
 
 var (
 	file_codebase_proto_rawDescOnce sync.Once

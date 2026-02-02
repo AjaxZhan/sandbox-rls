@@ -1457,7 +1457,7 @@ const file_sandbox_proto_rawDesc = "" +
 	"\fListSessions\x12\x1f.sandbox.v1.ListSessionsRequest\x1a .sandbox.v1.ListSessionsResponse\"+\x82\xd3\xe4\x93\x02%\x12#/v1/sandboxes/{sandbox_id}/sessions\x12i\n" +
 	"\x0eDestroySession\x12!.sandbox.v1.DestroySessionRequest\x1a\x11.sandbox.v1.Empty\"!\x82\xd3\xe4\x93\x02\x1b*\x19/v1/sessions/{session_id}\x12p\n" +
 	"\vSessionExec\x12\x1e.sandbox.v1.SessionExecRequest\x1a\x16.sandbox.v1.ExecResult\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/v1/sessions/{session_id}/exec\x12M\n" +
-	"\x11SessionExecStream\x12\x1e.sandbox.v1.SessionExecRequest\x1a\x16.sandbox.v1.ExecOutput0\x01B>Z<github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1b\x06proto3"
+	"\x11SessionExecStream\x12\x1e.sandbox.v1.SessionExecRequest\x1a\x16.sandbox.v1.ExecOutput0\x01B=Z;github.com/AjaxZhan/AgentFense/api/gen/sandbox/v1;sandboxv1b\x06proto3"
 
 var (
 	file_sandbox_proto_rawDescOnce sync.Once

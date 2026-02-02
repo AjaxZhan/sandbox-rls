@@ -6,7 +6,7 @@ set -e
 
 VERSION=${1:-"dev"}
 OUTPUT_DIR="dist"
-BINARY_NAME="sandbox-server"
+BINARY_NAME="agentfense-server"
 
 # Colors for output
 RED='\033[0;31m'
@@ -44,7 +44,7 @@ for PLATFORM in "${PLATFORMS[@]}"; do
     GOOS=$GOOS GOARCH=$GOARCH go build \
         -ldflags="-s -w -X main.Version=${VERSION}" \
         -o "${OUTPUT_DIR}/${OUTPUT_NAME}" \
-        ./cmd/sandbox-server
+        ./cmd/agentfense-server
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Built ${OUTPUT_NAME}${NC}"

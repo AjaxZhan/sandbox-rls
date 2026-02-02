@@ -1,1 +1,1 @@
-"""Tests for sandbox_rls package."""
+"""Tests for agentfense package."""

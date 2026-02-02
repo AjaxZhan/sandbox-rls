@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from sandbox_rls.sandbox import Sandbox
-from sandbox_rls.types import (
+from agentfense.sandbox import Sandbox
+from agentfense.types import (
     Codebase,
     ExecResult,
     Permission,
@@ -19,7 +19,7 @@ from sandbox_rls.types import (
     Sandbox as SandboxInfo,
     SandboxStatus,
 )
-from sandbox_rls.exceptions import CommandExecutionError
+from agentfense.exceptions import CommandExecutionError
 
 
 class TestSandboxProperties:
@@ -321,7 +321,7 @@ class TestSandboxFileOperations:
     def test_list_files_returns_paths(self):
         """Test that list_files returns file paths."""
         mock_client = MagicMock()
-        from sandbox_rls.types import FileInfo
+        from agentfense.types import FileInfo
         mock_client.list_files.return_value = [
             FileInfo(path="/a.txt", name="a.txt", is_dir=False, size=100),
             FileInfo(path="/b.txt", name="b.txt", is_dir=False, size=200),
@@ -426,7 +426,7 @@ class TestSandboxPresetDefaults:
         sig = inspect.signature(Sandbox.from_codebase)
         assert sig.parameters["preset"].default == "view-only"
     
-    @patch("sandbox_rls.sandbox.SandboxClient")
+    @patch("agentfense.sandbox.SandboxClient")
     def test_from_local_creates_resources(self, mock_client_class):
         """Test that from_local creates codebase and sandbox."""
         # Set up mocks
@@ -468,8 +468,8 @@ class TestSandboxPresetDefaults:
             # Clean up
             sandbox._destroyed = True  # Prevent actual cleanup
 
-    @patch("sandbox_rls.sandbox.get_preset_dicts")
-    @patch("sandbox_rls.sandbox.SandboxClient")
+    @patch("agentfense.sandbox.get_preset_dicts")
+    @patch("agentfense.sandbox.SandboxClient")
     def test_from_local_preset_none_defaults_to_view_only(self, mock_client_class, mock_get_preset_dicts):
         """Passing preset=None should behave like default view-only."""
         # Set up mocks

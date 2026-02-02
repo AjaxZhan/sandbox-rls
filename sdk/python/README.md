@@ -2,12 +2,10 @@
 
 Python client library for the AgentFense service - a sandbox infrastructure for AI Agents with fine-grained file permission control.
 
-**Compatibility note**: package/import names remain `sandbox-rls` / `sandbox_rls` for now.
-
 ## Installation
 
 ```bash
-pip install sandbox-rls
+pip install agentfense
 ```
 
 Or install from source:
@@ -22,7 +20,7 @@ pip install -e .
 The easiest way to use the SDK is with the high-level `Sandbox` class:
 
 ```python
-from sandbox_rls import Sandbox
+from agentfense import Sandbox
 
 # One-liner to create a sandbox from a local directory
 with Sandbox.from_local("./my-project") as sandbox:
@@ -40,7 +38,7 @@ This automatically:
 ### Using Docker Runtime with Resource Limits
 
 ```python
-from sandbox_rls import Sandbox, RuntimeType, ResourceLimits
+from agentfense import Sandbox, RuntimeType, ResourceLimits
 
 with Sandbox.from_local(
     "./my-project",
@@ -73,7 +71,7 @@ The SDK includes several built-in permission presets:
 | `view-only` | Can see file names but not read content |
 
 ```python
-from sandbox_rls import list_presets, get_preset, extend_preset
+from agentfense import list_presets, get_preset, extend_preset
 
 # List all available presets
 print(list_presets())  # ['agent-safe', 'development', 'full-access', 'read-only', 'view-only']
@@ -90,7 +88,7 @@ rules = extend_preset(
 The SDK provides semantic exception classes:
 
 ```python
-from sandbox_rls import Sandbox, SandboxError, CommandTimeoutError, CommandExecutionError
+from agentfense import Sandbox, SandboxError, CommandTimeoutError, CommandExecutionError
 
 try:
     with Sandbox.from_local("./my-project") as sandbox:
@@ -108,7 +106,7 @@ except SandboxError as e:
 For fine-grained control, use the `SandboxClient` directly:
 
 ```python
-from sandbox_rls import SandboxClient, RuntimeType, ResourceLimits
+from agentfense import SandboxClient, RuntimeType, ResourceLimits
 
 # Connect to the sandbox server
 client = SandboxClient(endpoint="localhost:9000")
@@ -161,7 +159,7 @@ The SDK supports four permission levels:
 You can use glob patterns, directory paths, or file paths:
 
 ```python
-from sandbox_rls import PermissionRule, Permission, PatternType
+from agentfense import PermissionRule, Permission, PatternType
 
 permissions = [
     # Glob pattern - matches all .py files
@@ -334,11 +332,11 @@ pip install -e ".[dev]"
 pytest
 
 # Format code
-black sandbox_rls tests
-ruff check --fix sandbox_rls tests
+black agentfense tests
+ruff check --fix agentfense tests
 
 # Type check
-mypy sandbox_rls
+mypy agentfense
 ```
 
 ## License

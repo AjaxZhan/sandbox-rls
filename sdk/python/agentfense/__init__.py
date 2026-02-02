@@ -7,7 +7,7 @@ operations.
 High-Level API (Recommended):
     Use the Sandbox class for the simplest experience:
     
-    >>> from sandbox_rls import Sandbox
+    >>> from agentfense import Sandbox
     >>> 
     >>> # One-liner to create and run commands in a sandbox
     >>> with Sandbox.from_local("./my-project") as sandbox:
@@ -27,7 +27,7 @@ High-Level API (Recommended):
 Async API:
     Use AsyncSandbox for async/await operations:
     
-    >>> from sandbox_rls import AsyncSandbox
+    >>> from agentfense import AsyncSandbox
     >>> 
     >>> async with await AsyncSandbox.from_local("./my-project") as sandbox:
     ...     result = await sandbox.run("python main.py")
@@ -36,7 +36,7 @@ Async API:
 Low-Level API:
     Use SandboxClient for fine-grained control:
     
-    >>> from sandbox_rls import SandboxClient
+    >>> from agentfense import SandboxClient
     >>> 
     >>> client = SandboxClient(endpoint="localhost:9000")
     >>> 

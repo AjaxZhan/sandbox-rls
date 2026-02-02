@@ -10,12 +10,12 @@ import inspect
 from unittest.mock import MagicMock, patch
 
 # Test imports work
-from sandbox_rls import (
+from agentfense import (
     AsyncSandbox,
     AsyncSandboxClient,
     AsyncSessionWrapper,
 )
-from sandbox_rls._async import (
+from agentfense._async import (
     AsyncSandbox as AsyncSandboxDirect,
     AsyncSandboxClient as AsyncSandboxClientDirect,
     AsyncSessionWrapper as AsyncSessionWrapperDirect,
@@ -161,8 +161,8 @@ class TestAsyncSandboxPresetDefaults:
 class TestAsyncSandboxPresetNone:
     """Tests for AsyncSandbox preset=None behavior."""
     
-    @patch("sandbox_rls._async.sandbox.get_preset_dicts")
-    @patch("sandbox_rls._async.sandbox.AsyncSandboxClient")
+    @patch("agentfense._async.sandbox.get_preset_dicts")
+    @patch("agentfense._async.sandbox.AsyncSandboxClient")
     async def test_from_local_preset_none_defaults_to_view_only(
         self, mock_client_class, mock_get_preset_dicts, tmp_path
     ):
@@ -172,7 +172,7 @@ class TestAsyncSandboxPresetNone:
         mock_get_preset_dicts.return_value = []
         
         # Async mocks for client methods
-        from sandbox_rls.types import Codebase, Sandbox as SandboxInfo, SandboxStatus
+        from agentfense.types import Codebase, Sandbox as SandboxInfo, SandboxStatus
         mock_client.create_codebase = MagicMock(return_value=Codebase(id="cb_123", name="t", owner_id="u"))
         mock_client.upload_file = MagicMock()
         mock_client.create_sandbox = MagicMock(
@@ -253,7 +253,7 @@ class TestExecResultIntegration:
 
     def test_exec_result_chain_with_raise(self):
         """ExecResult.raise_on_error() returns self for chaining."""
-        from sandbox_rls import ExecResult
+        from agentfense import ExecResult
         
         result = ExecResult(
             stdout="Success",
@@ -270,7 +270,7 @@ class TestExecResultIntegration:
 
     def test_exec_result_output_combination(self):
         """ExecResult.output combines stdout and stderr correctly."""
-        from sandbox_rls import ExecResult
+        from agentfense import ExecResult
         
         result = ExecResult(
             stdout="Line 1",

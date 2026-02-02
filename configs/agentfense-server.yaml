@@ -8,11 +8,11 @@ server:
 
 storage:
   # Base path for codebase storage
-  codebase_path: "/var/lib/sandbox/codebases"
+  codebase_path: "/var/lib/agentfense/codebases"
   # Base path for sandbox mount points
-  mount_path: "/var/lib/sandbox/mounts"
+  mount_path: "/var/lib/agentfense/mounts"
   # Metadata database path
-  db_path: "/var/lib/sandbox/metadata.db"
+  db_path: "/var/lib/agentfense/metadata.db"
 
 runtime:
   # Runtime type: bwrap, docker, mock

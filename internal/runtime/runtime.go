@@ -4,7 +4,7 @@ package runtime
 import (
 	"context"
 
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // SandboxConfig contains configuration for creating a new sandbox.
@@ -17,7 +17,7 @@ type SandboxConfig struct {
 	Labels       map[string]string
 
 	// Runtime configuration
-	Runtime   types.RuntimeType    // Runtime type: bwrap, docker
+	Runtime   types.RuntimeType     // Runtime type: bwrap, docker
 	Resources *types.ResourceLimits // Resource limits (memory, CPU, pids)
 	Docker    *types.DockerConfig   // Docker-specific configuration
 }

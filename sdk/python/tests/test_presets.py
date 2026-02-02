@@ -1,7 +1,7 @@
 """Tests for the presets module."""
 
 import pytest
-from sandbox_rls.presets import (
+from agentfense.presets import (
     PRESETS,
     get_preset,
     get_preset_dicts,
@@ -9,7 +9,7 @@ from sandbox_rls.presets import (
     list_presets,
     register_preset,
 )
-from sandbox_rls.types import Permission, PatternType, PermissionRule
+from agentfense.types import Permission, PatternType, PermissionRule
 
 
 class TestGetPreset:

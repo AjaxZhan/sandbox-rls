@@ -13,7 +13,7 @@ import os
 import re
 from dotenv import load_dotenv
 from anthropic import Anthropic
-from sandbox_rls import Sandbox
+from agentfense import Sandbox
 
 load_dotenv(override=True)
 

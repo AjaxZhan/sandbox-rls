@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sandbox.v1;
 
-option go_package = "github.com/ajaxzhan/sandbox-rls/api/gen/sandbox/v1;sandboxv1";
+option go_package = "github.com/AjaxZhan/AgentFense/api/gen/sandbox/v1;sandboxv1";
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";

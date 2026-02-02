@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PROTO_DIR="$PROJECT_ROOT/api/proto"
 GO_OUT_DIR="$PROJECT_ROOT/api/gen"
-PYTHON_OUT_DIR="$PROJECT_ROOT/sdk/python/sandbox_rls/_gen"
+PYTHON_OUT_DIR="$PROJECT_ROOT/sdk/python/agentfense/_gen"
 
 # Create output directories
 mkdir -p "$GO_OUT_DIR"

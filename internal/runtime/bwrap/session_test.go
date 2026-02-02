@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime"
-	"github.com/ajaxzhan/sandbox-rls/internal/runtime/bwrap"
-	"github.com/ajaxzhan/sandbox-rls/pkg/types"
+	"github.com/AjaxZhan/AgentFense/internal/runtime"
+	"github.com/AjaxZhan/AgentFense/internal/runtime/bwrap"
+	"github.com/AjaxZhan/AgentFense/pkg/types"
 )
 
 // setupSessionTest creates a running sandbox for session tests.
