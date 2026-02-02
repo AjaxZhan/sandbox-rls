@@ -310,7 +310,7 @@ def from_grpc_error(error, context: Optional[str] = None) -> SandboxError:
     if context:
         details = f"{context}. {details}"
     
-    grpc_code = code.value[0] if code else None
+    grpc_code = code.value if code else None
     
     # Map gRPC codes to SDK exceptions
     if code == grpc.StatusCode.NOT_FOUND:

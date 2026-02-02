@@ -145,6 +145,7 @@ class Sandbox:
         # Create client
         client = SandboxClient(endpoint=endpoint, secure=secure)
         
+        codebase = None
         try:
             # Generate defaults
             if owner_id is None:
@@ -165,13 +166,7 @@ class Sandbox:
             
             # Build permissions: preset + custom
             perm_rules: List[Union[PermissionRule, Dict]] = []
-            try:
-                perm_rules.extend(get_preset_dicts(preset))
-            except ValueError as e:
-                # Clean up codebase on error
-                client.delete_codebase(codebase.id)
-                client.close()
-                raise e
+            perm_rules.extend(get_preset_dicts(preset))
             
             if permissions:
                 perm_rules.extend(permissions)
@@ -199,6 +194,12 @@ class Sandbox:
             )
             
         except Exception as e:
+            # Clean up codebase if it was created
+            if codebase is not None:
+                try:
+                    client.delete_codebase(codebase.id)
+                except Exception:
+                    pass  # Best effort cleanup
             client.close()
             raise
     

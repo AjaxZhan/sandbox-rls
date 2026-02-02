@@ -1,6 +1,6 @@
 # Sandbox RLS
 
-Fine-grained filesystem permissions for AI agent sandboxes.
+Fine-grained filesystem permissions for AI agent sandboxes. 
 
 Sandbox RLS lets you run untrusted AI agent code **against a real codebase** while enforcing **path-based, least-privilege access** at the file level.
 
@@ -31,7 +31,21 @@ Sandbox RLS is built for the missing middle ground: **“You can edit `/docs`, y
 
 ## 30-second example (Python SDK)
 
-Give an agent a real repo, but only let it write docs, list metadata, and never see secrets:
+Give an agent a real repo with one line of code - using built-in permission presets that automatically hide secrets:
+
+```python
+from sandbox_sdk import Sandbox
+
+# One-liner: create sandbox from local directory with "agent-safe" preset
+with Sandbox.from_local("./my-project") as sandbox:
+    result = sandbox.run("python main.py")
+    print(result.stdout)
+# Automatically cleans up when done
+```
+
+The `agent-safe` preset provides sensible defaults: read all files, write to /output and /tmp, hide secrets (.env, *.key, etc.).
+
+For fine-grained control, customize permissions:
 
 ```python
 sandbox = client.create_sandbox(
@@ -69,6 +83,9 @@ Rule priority: **more specific wins** (file-level > directory-level > glob).
 - **Stateful sessions**: persistent shell sessions that maintain working directory and environment variables
 - **Resource limits**: memory, CPU, and process count limits (via Docker runtime)
 - **Multi-sandbox codebase sharing**: same folder can be mounted by multiple agents with different permissions
+- **One-liner API**: `Sandbox.from_local("./project")` creates sandbox instantly from local directory
+- **Permission presets**: built-in presets like `agent-safe` that hide secrets automatically
+- **Semantic error handling**: typed exceptions like `CommandTimeoutError`, `PermissionDeniedError`
 
 ## Comparison
 
@@ -96,12 +113,15 @@ See [ROADMAP.md](ROADMAP.md) for the detailed development plan.
 | Docker runtime | ✅ Full Docker isolation with custom image support |
 | Resource limits | ✅ Memory, CPU, and process count limits |
 | Delta Layer (COW) | ✅ Copy-On-Write isolation for multi-sandbox write safety |
+| One-liner API | ✅ `Sandbox.from_local()` for instant sandbox creation |
+| Permission presets | ✅ Built-in presets: agent-safe, read-only, full-access, etc. |
+| Error handling | ✅ Semantic exceptions: CommandTimeoutError, PermissionDeniedError, etc. |
 
 **Current priorities:**
 
 | Phase | Focus | Key Features |
 |-------|-------|--------------|
-| **Phase 2** | Developer Experience | One-liner API, permission presets, CLI tool, Go SDK |
+| **Phase 2** | Developer Experience | CLI tool, Go SDK, configuration files |
 | **Phase 3** | Multi-agent | File locking, agent communication, external data sources |
 
 **What we're NOT building** (out of scope):
@@ -250,10 +270,83 @@ cd sdk/python
 pip install -e .
 ```
 
-Then run this complete example that demonstrates all four permission levels:
+##### Quick Start (High-Level API)
+
+The easiest way to use the SDK:
 
 ```python
-from sandbox_sdk import SandboxClient
+from sandbox_sdk import Sandbox, RuntimeType, ResourceLimits
+
+# One-liner: create sandbox from local directory
+with Sandbox.from_local("./my-project") as sandbox:
+    result = sandbox.run("python main.py")
+    print(result.stdout)
+
+# With Docker runtime and resource limits
+with Sandbox.from_local(
+    "./my-project",
+    preset="agent-safe",  # Built-in preset that hides secrets
+    runtime=RuntimeType.DOCKER,
+    image="python:3.11-slim",
+    resources=ResourceLimits(
+        memory_bytes=512 * 1024 * 1024,  # 512 MB
+        pids_limit=100,
+    ),
+) as sandbox:
+    # Use sessions for stateful commands
+    with sandbox.session() as session:
+        session.exec("cd /workspace")
+        session.exec("pip install -r requirements.txt")
+        result = session.exec("pytest")
+        print(result.stdout)
+```
+
+##### Permission Presets
+
+Built-in presets for common scenarios:
+
+| Preset | Description |
+|--------|-------------|
+| `agent-safe` | Read all, write to /output & /tmp, hide secrets (.env, *.key, etc.) |
+| `read-only` | Read all files, no write access |
+| `full-access` | Full read/write access |
+| `development` | Full access except secrets |
+
+```python
+from sandbox_sdk import list_presets, extend_preset
+
+# List available presets
+print(list_presets())  # ['agent-safe', 'development', 'full-access', 'read-only', 'view-only']
+
+# Extend a preset with custom rules
+rules = extend_preset(
+    "agent-safe",
+    additions=[{"pattern": "/custom/**", "permission": "write"}],
+)
+```
+
+##### Error Handling
+
+```python
+from sandbox_sdk import Sandbox, SandboxError, CommandTimeoutError, CommandExecutionError
+
+try:
+    with Sandbox.from_local("./project") as sandbox:
+        result = sandbox.run("python main.py", timeout=30, raise_on_error=True)
+except CommandTimeoutError as e:
+    print(f"Command timed out: {e}")
+except CommandExecutionError as e:
+    print(f"Command failed (exit {e.exit_code}): {e.stderr}")
+except SandboxError as e:
+    print(f"Sandbox error: {e}")
+```
+
+##### Complete Example (Low-Level API)
+
+For fine-grained control, use `SandboxClient` directly. This example demonstrates all four permission levels:
+
+```python
+from sandbox_sdk import SandboxClient, RuntimeType, ResourceLimits
 
 # Connect to the server (gRPC endpoint)
 client = SandboxClient(endpoint="localhost:9000")
@@ -299,7 +392,10 @@ sandbox = client.create_sandbox(
         {"pattern": "/metadata/**", "permission": "view"},
         # /secrets directory: completely hidden (invisible)
         {"pattern": "/secrets/**", "permission": "none"},
-    ]
+    ],
+    # Optional: use Docker runtime with resource limits
+    runtime=RuntimeType.BWRAP,  # or RuntimeType.DOCKER
+    # resources=ResourceLimits(memory_bytes=256*1024*1024),
 )
 print(f"Created sandbox: {sandbox.id}")
 
