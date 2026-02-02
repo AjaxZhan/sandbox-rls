@@ -271,6 +271,35 @@ curl -X DELETE http://localhost:8080/v1/sandboxes/sb_xxx
 
 **Delta Layer (COW)**: Multiple sandboxes can share the same codebase with isolated writes. Each sandbox writes to its own delta directory; changes sync to source on completion (Last-Writer-Wins).
 
+## Performance
+
+The architecture is designed to be lightweight. Each sandbox consumes minimal resources:
+
+| Component | Per-Sandbox Overhead |
+|-----------|---------------------|
+| Memory | ~5 MB |
+| Processes | ~2 |
+| FUSE mount | 1 |
+| Docker container | 1 (Docker runtime only) |
+
+**Stress test results** on a 2-core / 4GB RAM server (Docker runtime):
+
+| Metric | Result |
+|--------|--------|
+| Max concurrent sandboxes | **100+** (tested up to 120) |
+| Memory at 100 sandboxes | ~67% usage |
+| Stability | No crashes, clean resource cleanup |
+
+**Recommended capacity** (conservative):
+
+| Server Spec | Suggested Max Sandboxes |
+|-------------|------------------------|
+| 2 cores / 4 GB | 50–80 |
+| 4 cores / 8 GB | 150–200 |
+| 8 cores / 16 GB | 400+ |
+
+The bottleneck is typically memory, not CPU or FUSE. For higher concurrency, consider sandbox pooling or on-demand creation.
+
 ## Comparison
 
 | Capability | Sandbox-RLS | E2B | Docker | Others |
