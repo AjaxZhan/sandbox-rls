@@ -16,3 +16,6 @@ test_sessions/
 test_presets/
 test_errors/
 test_files/
+
+pyrightconfig.json
+.vscode/

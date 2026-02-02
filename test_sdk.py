@@ -30,7 +30,8 @@ try:
         CommandTimeoutError,
         CommandExecutionError,
         PermissionDeniedError,
-        PRESET_VIEW_ONLY
+        PRESET_VIEW_ONLY,
+        PRESET_READ_ONLY,
     )
 except ImportError:
     print("❌ 无法导入 sandbox_rls")
@@ -107,22 +108,32 @@ def test_2_permissions():
     
     try:
         print("\n📦 创建带自定义权限的沙盒...")
+        # 注意：使用 PRESET_READ_ONLY 作为基础（默认所有文件可读），
+        # 然后添加特定目录的覆盖规则。
+        # 不要同时使用 preset 和相同 pattern 的自定义规则，会导致优先级冲突。
         with Sandbox.from_local(
             str(test_dir),
-            preset=PRESET_VIEW_ONLY,
+            preset=PRESET_READ_ONLY,  # 基础：所有文件可读
             permissions=[
-                # 默认: 只读
-                {"pattern": "**/*", "permission": "read"},
-                # /docs: 可写
+                # /docs: 可写 (覆盖默认 read)
                 {"pattern": "/docs/**", "permission": "write"},
-                # /metadata: 只能列出文件名
+                # /metadata: 只能列出文件名 (覆盖默认 read)
                 {"pattern": "/metadata/**", "permission": "view"},
-                # /secrets: 完全隐藏
+                # /secrets: 完全隐藏 (覆盖默认 read)
                 {"pattern": "/secrets/**", "permission": "none"},
             ],
         ) as sandbox:
             print(f"✅ 沙盒已创建: {sandbox.id}\n")
             
+            result = sandbox.run("ls -la /workspace")
+            print(result.stdout.strip())
+            result = sandbox.run("ls -la /workspace/metadata")
+            print(result.stdout.strip())
+            result = sandbox.run("ls -la /workspace/public")
+            print(result.stdout.strip())
+            result = sandbox.run("ls -la /workspace/docs")
+            print(result.stdout.strip())
+
             # 测试 read 权限
             print("🔍 测试 READ 权限 (/public):")
             result = sandbox.run("cat /workspace/public/readme.txt")

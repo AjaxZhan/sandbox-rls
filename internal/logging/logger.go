@@ -3,6 +3,7 @@
 package logging
 
 import (
+	"log"
 	"os"
 	"strings"
 
@@ -46,7 +47,32 @@ func Init(cfg *Config) error {
 	)
 	sugar = logger.Sugar()
 
+	// Redirect standard library log output to zap (for third-party libraries like go-fuse)
+	// This outputs at WARN level since most stdlib log calls are warnings/errors
+	redirectStdLog()
+
 	return nil
+}
+
+// stdLogWriter implements io.Writer to redirect standard log output to zap.
+type stdLogWriter struct{}
+
+func (w *stdLogWriter) Write(p []byte) (n int, err error) {
+	// Remove trailing newline if present
+	msg := strings.TrimSuffix(string(p), "\n")
+	// Remove timestamp prefix if present (e.g., "2006/01/02 15:04:05 ")
+	if len(msg) > 20 && msg[4] == '/' && msg[7] == '/' && msg[10] == ' ' {
+		msg = msg[20:]
+	}
+	// Log at WARN level with source marker
+	sugar.Warnw(msg, "source", "stdlib")
+	return len(p), nil
+}
+
+// redirectStdLog redirects standard library log output to zap.
+func redirectStdLog() {
+	log.SetFlags(0) // Remove default timestamp (we'll use zap's)
+	log.SetOutput(&stdLogWriter{})
 }
 
 // parseLevel converts a string level to zapcore.Level.
