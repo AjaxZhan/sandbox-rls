@@ -1,4 +1,4 @@
-"""Sandbox RLS - Python client for the Sandbox RLS service.
+"""AgentFense - Python client for the AgentFense service.
 
 This SDK provides both low-level and high-level APIs for interacting
 with the Sandbox service, with support for both synchronous and asynchronous

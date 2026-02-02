@@ -90,7 +90,7 @@ jobs:
         with:
           name: Release ${{ steps.version.outputs.VERSION }}
           body: |
-            ## Sandbox RLS ${{ steps.version.outputs.VERSION }}
+            ## AgentFense ${{ steps.version.outputs.VERSION }}
             
             ### Downloads
             

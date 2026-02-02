@@ -1,4 +1,4 @@
-"""Tests for Session functionality in the Sandbox RLS Python SDK.
+"""Tests for Session functionality in the AgentFense Python SDK.
 
 These tests verify the Session type definitions and basic functionality.
 Note: Full integration tests require a running sandbox server.

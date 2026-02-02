@@ -1,11 +1,13 @@
-# Sandbox RLS
+# AgentFense
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/sandbox-rls?logo=pypi&logoColor=white)](https://pypi.org/project/sandbox-rls/)
-[![Release](https://img.shields.io/github/v/release/ajaxzhan/sandbox-rls?logo=github)](https://github.com/ajaxzhan/sandbox-rls/releases)
+[![Release](https://img.shields.io/github/v/release/AjaxZhan/AgentFense?logo=github)](https://github.com/AjaxZhan/AgentFense/releases)
 [![FUSE](https://img.shields.io/badge/FUSE-filesystem-orange)](https://github.com/libfuse/libfuse)
 
-> Filesystem sandbox with fine-grained, path-based access control for AI agents
+> Least-privilege filesystem sandbox & context guardrails for AI agents
+
+**Compatibility note**: for now, technical identifiers remain unchanged (e.g. PyPI package `sandbox-rls`, Python import `sandbox_rls`, Go module path, default `/tmp/sandbox-rls` paths).
 
 Run untrusted AI agent code **against a real codebase** while enforcing **least-privilege access** at the file level.
 
@@ -15,7 +17,7 @@ The best agent interface remains simple: **bash + filesystem**. With FUSE, you c
 
 But there's a gap: filesystems are usually **all-or-nothing**. Mount a real repo, and you often expose *everything*—including secrets.
 
-Sandbox RLS fills that gap with four permission levels:
+AgentFense fills that gap with four permission levels:
 
 | Level | What the agent can do |
 |-------|------------------------|
@@ -103,8 +105,8 @@ See [`example/ticket-agent/`](example/ticket-agent/) for a complete interactive 
 ### Server
 
 ```bash
-git clone https://github.com/ajaxzhan/sandbox-rls.git
-cd sandbox-rls
+git clone https://github.com/AjaxZhan/AgentFense.git
+cd AgentFense
 
 go mod tidy
 go build -o bin/sandbox-server ./cmd/sandbox-server
@@ -302,7 +304,7 @@ The bottleneck is typically memory, not CPU or FUSE. For higher concurrency, con
 
 ## Comparison
 
-| Capability | Sandbox-RLS | E2B | Docker | Others |
+| Capability | AgentFense | E2B | Docker | Others |
 |------------|-------------|-----|--------|--------|
 | Path-based least privilege | ✅ (glob + priority) | ❌ | ⚠️ coarse | ⚠️ varies |
 | Hidden paths (`none`) | ✅ invisible | ❌ | ❌ | ⚠️ varies |

@@ -1,6 +1,8 @@
-# Sandbox RLS SDK for Python
+# AgentFense SDK for Python
 
-Python client library for the Sandbox RLS service - a sandbox infrastructure for AI Agents with fine-grained file permission control.
+Python client library for the AgentFense service - a sandbox infrastructure for AI Agents with fine-grained file permission control.
+
+**Compatibility note**: package/import names remain `sandbox-rls` / `sandbox_rls` for now.
 
 ## Installation
 

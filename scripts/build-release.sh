@@ -14,7 +14,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Building sandbox-rls ${VERSION}${NC}"
+echo -e "${GREEN}Building AgentFense ${VERSION}${NC}"
 
 # Clean previous builds
 rm -rf "$OUTPUT_DIR"

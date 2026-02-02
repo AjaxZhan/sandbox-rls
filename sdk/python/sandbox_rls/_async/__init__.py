@@ -1,4 +1,4 @@
-"""Async API for Sandbox RLS SDK.
+"""Async API for AgentFense SDK.
 
 This module provides asynchronous versions of the Sandbox SDK classes,
 allowing for non-blocking operations in async/await codebases.

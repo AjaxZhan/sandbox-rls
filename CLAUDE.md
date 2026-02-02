@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sandbox RLS is a filesystem-backed sandbox system that enforces fine-grained, path-based access control for AI agents. It lets you run untrusted code against a real codebase while enforcing least-privilege access at the file level using four permission levels: `none` (invisible), `view` (list-only), `read`, and `write`.
+AgentFense is a filesystem-backed sandbox system that enforces fine-grained, path-based access control for AI agents. It lets you run untrusted code against a real codebase while enforcing least-privilege access at the file level using four permission levels: `none` (invisible), `view` (list-only), `read`, and `write`.
 
 ## Essential Commands
 

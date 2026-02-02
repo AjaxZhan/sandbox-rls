@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# Sandbox RLS - Docker Runtime 初始化脚本
+# AgentFense - Docker Runtime 初始化脚本
 # 此脚本会拉取常用的 Docker 镜像以提升首次使用体验
 
 echo "╔══════════════════════════════════════════════════════════════════╗"
-echo "║         Sandbox RLS - Docker Runtime 初始化                      ║"
+echo "║         AgentFense - Docker Runtime 初始化                       ║"
 echo "╚══════════════════════════════════════════════════════════════════╝"
 echo ""
 
