@@ -86,7 +86,7 @@ class Sandbox:
     def from_local(
         cls,
         path: str,
-        preset: str = "agent-safe",
+        preset: Optional[str] = "view-only",
         permissions: Optional[List[Union[PermissionRule, Dict]]] = None,
         runtime: RuntimeType = RuntimeType.BWRAP,
         image: Optional[str] = None,
@@ -109,7 +109,7 @@ class Sandbox:
         
         Args:
             path: Path to the local directory.
-            preset: Permission preset name ("agent-safe", "read-only", "full-access").
+            preset: Permission preset name ("view-only", "agent-safe", "read-only", "full-access").
             permissions: Additional permission rules (added to preset).
             runtime: Runtime type (bwrap or docker).
             image: Docker image name (required for docker runtime).
@@ -141,6 +141,10 @@ class Sandbox:
             raise ValueError(f"Path does not exist: {path}")
         if not dir_path.is_dir():
             raise ValueError(f"Path is not a directory: {path}")
+
+        # Normalize preset: treat None as default
+        if preset is None:
+            preset = "view-only"
         
         # Create client
         client = SandboxClient(endpoint=endpoint, secure=secure)
@@ -214,7 +218,7 @@ class Sandbox:
     def from_codebase(
         cls,
         codebase_id: str,
-        preset: str = "agent-safe",
+        preset: Optional[str] = "view-only",
         permissions: Optional[List[Union[PermissionRule, Dict]]] = None,
         runtime: RuntimeType = RuntimeType.BWRAP,
         image: Optional[str] = None,
@@ -245,6 +249,10 @@ class Sandbox:
             A Sandbox instance ready for use.
         """
         client = SandboxClient(endpoint=endpoint, secure=secure)
+
+        # Normalize preset: treat None as default
+        if preset is None:
+            preset = "view-only"
         
         sandbox_info = None
         try:

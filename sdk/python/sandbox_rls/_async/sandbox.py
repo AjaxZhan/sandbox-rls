@@ -85,7 +85,7 @@ class AsyncSandbox:
     async def from_local(
         cls,
         path: str,
-        preset: str = "agent-safe",
+        preset: Optional[str] = "view-only",
         permissions: Optional[List[Union[PermissionRule, Dict]]] = None,
         runtime: RuntimeType = RuntimeType.BWRAP,
         image: Optional[str] = None,
@@ -108,7 +108,7 @@ class AsyncSandbox:
         
         Args:
             path: Path to the local directory.
-            preset: Permission preset name ("agent-safe", "read-only", "full-access").
+            preset: Permission preset name ("view-only", "agent-safe", "read-only", "full-access").
             permissions: Additional permission rules (added to preset).
             runtime: Runtime type (bwrap or docker).
             image: Docker image name (required for docker runtime).
@@ -140,6 +140,10 @@ class AsyncSandbox:
             raise ValueError(f"Path does not exist: {path}")
         if not dir_path.is_dir():
             raise ValueError(f"Path is not a directory: {path}")
+
+        # Normalize preset: treat None as default
+        if preset is None:
+            preset = "view-only"
         
         # Create client
         client = AsyncSandboxClient(endpoint=endpoint, secure=secure)
@@ -213,7 +217,7 @@ class AsyncSandbox:
     async def from_codebase(
         cls,
         codebase_id: str,
-        preset: str = "agent-safe",
+        preset: Optional[str] = "view-only",
         permissions: Optional[List[Union[PermissionRule, Dict]]] = None,
         runtime: RuntimeType = RuntimeType.BWRAP,
         image: Optional[str] = None,
@@ -244,6 +248,10 @@ class AsyncSandbox:
             An AsyncSandbox instance ready for use.
         """
         client = AsyncSandboxClient(endpoint=endpoint, secure=secure)
+
+        # Normalize preset: treat None as default
+        if preset is None:
+            preset = "view-only"
         
         sandbox_info = None
         try:

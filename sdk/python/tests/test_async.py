@@ -6,6 +6,8 @@ Full integration tests would require a running sandbox server.
 
 import pytest
 from datetime import timedelta
+import inspect
+from unittest.mock import MagicMock, patch
 
 # Test imports work
 from sandbox_rls import (
@@ -139,6 +141,66 @@ class TestAsyncSandboxStructure:
         """AsyncSandbox should support async context manager."""
         assert hasattr(AsyncSandbox, '__aenter__')
         assert hasattr(AsyncSandbox, '__aexit__')
+
+
+class TestAsyncSandboxPresetDefaults:
+    """Tests for AsyncSandbox default preset behavior."""
+    
+    def test_from_local_default_preset_is_view_only(self):
+        """AsyncSandbox.from_local should default to view-only when preset not passed."""
+        sig = inspect.signature(AsyncSandbox.from_local)
+        assert sig.parameters["preset"].default == "view-only"
+    
+    def test_from_codebase_default_preset_is_view_only(self):
+        """AsyncSandbox.from_codebase should default to view-only when preset not passed."""
+        sig = inspect.signature(AsyncSandbox.from_codebase)
+        assert sig.parameters["preset"].default == "view-only"
+
+
+@pytest.mark.asyncio
+class TestAsyncSandboxPresetNone:
+    """Tests for AsyncSandbox preset=None behavior."""
+    
+    @patch("sandbox_rls._async.sandbox.get_preset_dicts")
+    @patch("sandbox_rls._async.sandbox.AsyncSandboxClient")
+    async def test_from_local_preset_none_defaults_to_view_only(
+        self, mock_client_class, mock_get_preset_dicts, tmp_path
+    ):
+        """Passing preset=None should behave like default view-only (async)."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_get_preset_dicts.return_value = []
+        
+        # Async mocks for client methods
+        from sandbox_rls.types import Codebase, Sandbox as SandboxInfo, SandboxStatus
+        mock_client.create_codebase = MagicMock(return_value=Codebase(id="cb_123", name="t", owner_id="u"))
+        mock_client.upload_file = MagicMock()
+        mock_client.create_sandbox = MagicMock(
+            return_value=SandboxInfo(id="sb_456", codebase_id="cb_123", status=SandboxStatus.PENDING)
+        )
+        mock_client.start_sandbox = MagicMock(
+            return_value=SandboxInfo(id="sb_456", codebase_id="cb_123", status=SandboxStatus.RUNNING)
+        )
+        
+        async def _awaitable(x):
+            return x
+        
+        # Make the async client methods awaitable
+        mock_client.create_codebase.side_effect = lambda *a, **k: _awaitable(mock_client.create_codebase.return_value)
+        mock_client.upload_file.side_effect = lambda *a, **k: _awaitable(None)
+        mock_client.create_sandbox.side_effect = lambda *a, **k: _awaitable(mock_client.create_sandbox.return_value)
+        mock_client.start_sandbox.side_effect = lambda *a, **k: _awaitable(mock_client.start_sandbox.return_value)
+        mock_client.destroy_sandbox.side_effect = lambda *a, **k: _awaitable(None)
+        mock_client.delete_codebase.side_effect = lambda *a, **k: _awaitable(None)
+        mock_client.close.side_effect = lambda *a, **k: _awaitable(None)
+        
+        (tmp_path / "test.py").write_text("print('hello')")
+        
+        sandbox = await AsyncSandbox.from_local(str(tmp_path), preset=None)  # type: ignore[arg-type]
+        try:
+            mock_get_preset_dicts.assert_called_once_with("view-only")
+        finally:
+            sandbox._destroyed = True
 
 
 class TestAsyncSessionWrapperStructure:

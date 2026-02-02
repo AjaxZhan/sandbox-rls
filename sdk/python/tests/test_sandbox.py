@@ -2,6 +2,7 @@
 
 import tempfile
 import os
+import inspect
 from pathlib import Path
 from unittest.mock import MagicMock, patch, PropertyMock
 
@@ -410,6 +411,20 @@ class TestSandboxFromLocal:
                 Sandbox.from_local(f.name)
             
             assert "not a directory" in str(exc_info.value)
+
+
+class TestSandboxPresetDefaults:
+    """Tests for default preset behavior."""
+    
+    def test_from_local_default_preset_is_view_only(self):
+        """Sandbox.from_local should default to view-only when preset not passed."""
+        sig = inspect.signature(Sandbox.from_local)
+        assert sig.parameters["preset"].default == "view-only"
+    
+    def test_from_codebase_default_preset_is_view_only(self):
+        """Sandbox.from_codebase should default to view-only when preset not passed."""
+        sig = inspect.signature(Sandbox.from_codebase)
+        assert sig.parameters["preset"].default == "view-only"
     
     @patch("sandbox_rls.sandbox.SandboxClient")
     def test_from_local_creates_resources(self, mock_client_class):
@@ -449,6 +464,41 @@ class TestSandboxFromLocal:
             mock_client.upload_file.assert_called()
             mock_client.create_sandbox.assert_called_once()
             mock_client.start_sandbox.assert_called_once()
+            
+            # Clean up
+            sandbox._destroyed = True  # Prevent actual cleanup
+
+    @patch("sandbox_rls.sandbox.get_preset_dicts")
+    @patch("sandbox_rls.sandbox.SandboxClient")
+    def test_from_local_preset_none_defaults_to_view_only(self, mock_client_class, mock_get_preset_dicts):
+        """Passing preset=None should behave like default view-only."""
+        # Set up mocks
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_get_preset_dicts.return_value = []
+        
+        mock_codebase = Codebase(id="cb_123", name="test", owner_id="user_1")
+        mock_client.create_codebase.return_value = mock_codebase
+        
+        mock_sandbox_info = SandboxInfo(
+            id="sb_456",
+            codebase_id="cb_123",
+            status=SandboxStatus.PENDING,
+        )
+        mock_client.create_sandbox.return_value = mock_sandbox_info
+        mock_client.start_sandbox.return_value = SandboxInfo(
+            id="sb_456",
+            codebase_id="cb_123",
+            status=SandboxStatus.RUNNING,
+        )
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test.py"
+            test_file.write_text("print('hello')")
+            
+            sandbox = Sandbox.from_local(tmpdir, preset=None)  # type: ignore[arg-type]
+            
+            mock_get_preset_dicts.assert_called_once_with("view-only")
             
             # Clean up
             sandbox._destroyed = True  # Prevent actual cleanup
