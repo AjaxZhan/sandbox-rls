@@ -1,6 +1,9 @@
 # Sandbox RLS
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/sandbox-rls?logo=pypi&logoColor=white)](https://pypi.org/project/sandbox-rls/)
+[![Release](https://img.shields.io/github/v/release/ajaxzhan/sandbox-rls?logo=github)](https://github.com/ajaxzhan/sandbox-rls/releases)
+[![FUSE](https://img.shields.io/badge/FUSE-filesystem-orange)](https://github.com/libfuse/libfuse)
 
 > Filesystem sandbox with fine-grained, path-based access control for AI agents
 
