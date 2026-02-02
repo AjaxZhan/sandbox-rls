@@ -22,6 +22,30 @@ if ! command -v protoc &> /dev/null; then
     exit 1
 fi
 
+# Check if Go is installed (required for Go protoc plugins).
+# Some environments install Go in /usr/local/go/bin but don't add it to PATH.
+if ! command -v go &> /dev/null; then
+    if [ -x /usr/local/go/bin/go ]; then
+        export PATH="/usr/local/go/bin:$PATH"
+    fi
+fi
+if ! command -v go &> /dev/null; then
+    echo "Error: go is not installed (or not on PATH)"
+    echo "Please install Go or add it to PATH."
+    echo "Common location: /usr/local/go/bin"
+    exit 1
+fi
+
+# Ensure Go-installed binaries (e.g. protoc-gen-go) are on PATH.
+# go install typically writes to:
+# - $GOBIN (if set), otherwise
+# - $(go env GOPATH)/bin
+GO_BIN="$(go env GOBIN)"
+if [ -z "$GO_BIN" ]; then
+    GO_BIN="$(go env GOPATH)/bin"
+fi
+export PATH="$GO_BIN:$PATH"
+
 # Check if Go plugins are installed
 if ! command -v protoc-gen-go &> /dev/null; then
     echo "Installing protoc-gen-go..."
@@ -81,17 +105,33 @@ if [ ! -d "$PYTHON_VENV" ]; then
     python3 -m venv "$PYTHON_VENV"
 fi
 
-# Activate virtual environment
-source "$PYTHON_VENV/bin/activate"
+# Use venv explicitly (avoid relying on activate/PATH).
+# Note: venv "activate" can break if the repo was moved after creation.
+VENV_PY="$PYTHON_VENV/bin/python3"
+if [ ! -x "$VENV_PY" ]; then
+    # Some venvs only ship "python"; fall back to it.
+    VENV_PY="$PYTHON_VENV/bin/python"
+fi
+if [ ! -x "$VENV_PY" ]; then
+    echo "Error: virtualenv python not found at $PYTHON_VENV/bin"
+    echo "Try deleting $PYTHON_VENV and re-running this script."
+    exit 1
+fi
+
+# Ensure pip exists inside venv
+if ! "$VENV_PY" -m pip --version &> /dev/null; then
+    "$VENV_PY" -m ensurepip --upgrade &> /dev/null || true
+fi
 
 # Check if grpcio-tools is available
-if ! python -c "import grpc_tools.protoc" &> /dev/null; then
+if ! "$VENV_PY" -c "import grpc_tools.protoc" &> /dev/null; then
     echo "Installing grpcio-tools..."
-    pip install grpcio grpcio-tools
+    "$VENV_PY" -m pip install --upgrade pip setuptools wheel
+    "$VENV_PY" -m pip install grpcio grpcio-tools
 fi
 
 # Generate Python code
-python -m grpc_tools.protoc \
+"$VENV_PY" -m grpc_tools.protoc \
     --proto_path="$PROTO_DIR" \
     --proto_path="$PROJECT_ROOT/third_party" \
     --python_out="$PYTHON_OUT_DIR" \
