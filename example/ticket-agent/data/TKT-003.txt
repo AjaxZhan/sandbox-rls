@@ -1,0 +1,7 @@
+title: 希望增加深色模式
+status: open
+priority: low
+assignee: none
+created: 2026-01-25
+
+建议在系统设置中添加深色主题选项，方便夜间使用。

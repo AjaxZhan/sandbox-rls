@@ -50,6 +50,41 @@ sandbox = client.create_sandbox(
 )
 ```
 
+## AI Agent Example
+
+Build secure AI agents that execute bash commands with permission control:
+
+```python
+from anthropic import Anthropic
+from sandbox_rls import Sandbox
+
+# Define what the agent can access
+PERMISSIONS = [
+    {"pattern": "**/*", "permission": "read"},      # Read all by default
+    {"pattern": "output/*", "permission": "write"}, # Can write to output/
+    {"pattern": ".env", "permission": "none"},      # Hide secrets
+]
+
+client = Anthropic()
+
+with Sandbox.from_local("./project", permissions=PERMISSIONS) as sandbox:
+    # Agent generates bash command
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        messages=[{"role": "user", "content": "List all Python files"}],
+        system="Output bash commands in ```bash``` blocks."
+    )
+    
+    # Execute safely in sandbox - permissions enforced at filesystem level
+    cmd = extract_command(response)  # e.g., "find . -name '*.py'"
+    result = sandbox.run(cmd)
+    print(result.stdout)
+```
+
+The agent cannot access `.env` even if it tries - the file is invisible at the filesystem level.
+
+See [`example/ticket-agent/`](example/ticket-agent/) for a complete interactive demo.
+
 ## Features
 
 - **Fine-grained permissions**: `none` / `view` / `read` / `write` with glob patterns
@@ -277,6 +312,12 @@ The `view` permission level may not work correctly on macOS with Docker Desktop 
 | `view` | ✅ | ❌ |
 | `read` | ✅ | ✅ |
 | `write` | ✅ | ✅ |
+
+## Examples
+
+| Example | Description |
+|---------|-------------|
+| [`example/ticket-agent/`](example/ticket-agent/) | Interactive AI agent with permission demo (write/read/view/none) |
 
 ## References
 
