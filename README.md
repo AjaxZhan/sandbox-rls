@@ -85,6 +85,28 @@ Rule priority: **more specific wins** (file-level > directory-level > glob).
 - **Multi-sandbox codebase sharing**: same folder can be mounted by multiple agents with different permissions
 - **Permission presets**: built-in presets like `agent-safe` that hide secrets automatically
 
+## Platform Notes
+
+### macOS + Docker Desktop Limitation
+
+When using the **Docker runtime on macOS**, the `view` permission level may not work correctly. Files with `view` permission will appear as "No such file or directory" inside the container, even though the underlying FUSE implementation works correctly.
+
+**Root cause**: Docker Desktop on macOS uses VirtioFS to share files between the host and the Linux VM. When binding a FUSE mount point into a container, VirtioFS doesn't correctly propagate certain FUSE responses for `view`-permission files.
+
+| Permission | Linux (Native Docker) | macOS (Docker Desktop) |
+|------------|----------------------|------------------------|
+| `none`     | ✅ Works              | ✅ Works                |
+| `view`     | ✅ Works              | ❌ Files appear missing |
+| `read`     | ✅ Works              | ✅ Works                |
+| `write`    | ✅ Works              | ✅ Works                |
+
+**Workarounds**:
+- **Recommended**: Run the Docker runtime on Linux for full `view` permission support
+- Use `read` permission instead of `view` if you only need to prevent writes
+- Use the `bwrap` runtime on Linux (not available on macOS)
+
+This limitation only affects macOS + Docker Desktop. The `bwrap` runtime on Linux and native Docker on Linux work correctly with all permission levels.
+
 ## Comparison
 
 The table below focuses on the agent-centric question: **can you safely run untrusted code against a real codebase with least-privilege filesystem access?**
@@ -204,11 +226,8 @@ go build -o bin/sandbox-server ./cmd/sandbox-server
 ### Running the Server
 
 ```bash
-# Create required directories
-sudo mkdir -p /var/lib/sandbox/{codebases,mounts}
-
 # Start the server (gRPC on :9000, REST on :8080)
-./bin/sandbox-server -config configs/sandbox-server.yaml
+./bin/sandbox-server -config test-config.yaml
 ```
 
 ### Try It Out
@@ -261,12 +280,18 @@ curl -X DELETE http://localhost:8080/v1/codebases/cb_abc123
 
 #### Option 2: Using Python SDK
 
-First, install the SDK:
+First, install the SDK in a virtual environment (recommended to avoid system Python conflicts):
 
 ```bash
-cd sdk/python
-pip install -e .
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the SDK in development mode
+pip install -e sdk/python/
 ```
+
+> **Note**: On modern Debian/Ubuntu systems (Python 3.12+), installing packages with `pip` outside a virtual environment will fail with "externally-managed-environment" error. Using a virtual environment is the recommended approach.
 
 ##### Quick Start (High-Level API)
 

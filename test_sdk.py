@@ -124,15 +124,6 @@ def test_2_permissions():
             ],
         ) as sandbox:
             print(f"✅ 沙盒已创建: {sandbox.id}\n")
-            
-            result = sandbox.run("ls -la /workspace")
-            print(result.stdout.strip())
-            result = sandbox.run("ls -la /workspace/metadata")
-            print(result.stdout.strip())
-            result = sandbox.run("ls -la /workspace/public")
-            print(result.stdout.strip())
-            result = sandbox.run("ls -la /workspace/docs")
-            print(result.stdout.strip())
 
             # 测试 read 权限
             print("🔍 测试 READ 权限 (/public):")
