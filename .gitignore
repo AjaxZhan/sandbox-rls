@@ -24,3 +24,7 @@ pyrightconfig.json
 example/ticket-agent/.venv/
 example/ticket-agent/__pycache__/
 .tmp/
+
+# MkDocs documentation
+site/
+.cache/

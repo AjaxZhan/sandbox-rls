@@ -1,0 +1,187 @@
+site_name: AgentFense
+site_url: https://ajaxzhan.github.io/AgentFense/
+site_description: Least-privilege filesystem sandbox & context guardrails for AI agents
+site_author: AgentFense Team
+repo_url: https://github.com/AjaxZhan/AgentFense
+repo_name: AjaxZhan/AgentFense
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - scheme: default
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant      # Instant loading (SPA)
+    - navigation.tracking     # Anchor tracking
+    - navigation.tabs         # Top-level sections as tabs
+    - navigation.tabs.sticky  # Sticky tabs
+    - navigation.sections     # Sections in navigation
+    - navigation.expand       # Auto-expand navigation
+    - navigation.top          # Back to top button
+    - navigation.indexes      # Section index pages
+    - search.suggest          # Search suggestions
+    - search.highlight        # Highlight search terms
+    - search.share            # Share search results
+    - content.code.copy       # Copy button for code blocks
+    - content.code.annotate   # Code annotations
+    - content.tabs.link       # Link content tabs
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - i18n:
+      docs_structure: folder
+      default_language: en
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        en:
+          name: English
+          build: true
+        zh:
+          name: 中文
+          build: true
+          nav_translations:
+            Get Started: 快速开始
+            Why AgentFense: 为什么选择 AgentFense
+            Security Model: 安全模型
+            SDK Documentation: SDK 文档
+            API Reference: API 参考
+            FAQ: 常见问题
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [sdk/python]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+            show_if_no_docstring: false
+
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  version:
+    provider: mike
+    default: latest
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/AjaxZhan/AgentFense
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/sandbox-rls/
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Get Started:
+    - index.md
+    - Quick Start: get-started/quickstart.md
+    - Core Concepts: get-started/concepts.md
+    - Installation: get-started/installation.md
+  - Why AgentFense:
+    - why/index.md
+    - Use Cases: why/use-cases.md
+    - Comparison: why/comparison.md
+    - Architecture: why/architecture.md
+  - Security Model:
+    - security/index.md
+    - Permission Levels: security/permissions.md
+    - Presets: security/presets.md
+    - Best Practices: security/best-practices.md
+  - SDK Documentation:
+    - sdk/index.md
+    - Python SDK:
+      - Overview: sdk/python/overview.md
+      - High-Level API: sdk/python/high-level.md
+      - Async API: sdk/python/async.md
+      - Sessions: sdk/python/sessions.md
+      - Permissions: sdk/python/permissions.md
+      - Error Handling: sdk/python/errors.md
+  - API Reference:
+    - reference/index.md
+    - Python API: reference/python.md
+    - Go API: reference/go.md
+    - gRPC/Proto: reference/grpc.md
+  - FAQ:
+    - faq/index.md
+    - Common Issues: faq/common-issues.md
+    - Performance: faq/performance.md

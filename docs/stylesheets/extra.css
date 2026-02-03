@@ -1,0 +1,57 @@
+/* Custom styles for AgentFense documentation */
+
+:root {
+  --md-primary-fg-color: #009688;
+  --md-accent-fg-color: #00bcd4;
+}
+
+/* Make code blocks more prominent */
+.md-typeset code {
+  background-color: var(--md-code-bg-color);
+  border-radius: 0.2rem;
+  padding: 0.1rem 0.3rem;
+}
+
+/* Enhance admonitions */
+.md-typeset .admonition {
+  border-left: 0.2rem solid;
+  border-radius: 0.2rem;
+}
+
+/* Better spacing for navigation */
+.md-nav__item {
+  padding: 0.125rem 0;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.2s ease;
+}
+
+/* Logo and branding */
+.md-header__button.md-logo img {
+  height: 2rem;
+}
+
+/* Custom styling for feature cards (if we add them) */
+.feature-card {
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  background-color: var(--md-default-bg-color);
+  box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+  margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+  margin-top: 0;
+  color: var(--md-primary-fg-color);
+}
+
+/* Code copy button styling */
+.md-clipboard {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-clipboard:hover {
+  color: var(--md-accent-fg-color);
+}
